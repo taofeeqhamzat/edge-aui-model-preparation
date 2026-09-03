@@ -74,7 +74,8 @@ notebook = {
             "metadata": {},
             "source": [
                 "## 2. Hosted Data Synchronization (Hugging Face Hub)\n",
-                "Verifies local dataset cache or pulls directly from `T40/edge-aui-framework-data`."
+                "Verifies local dataset cache or synchronizes from `T40/edge-aui-framework-data`.\n",
+                "> **Note on HTTP 429 Rate Limits:** Google Colab shares public IP addresses across many users. To avoid rate limits, set `HF_TOKEN` in Colab Secrets (🔑). `ensure_dataset()` will automatically throttle concurrent requests and fall back to single-stream Git clone if rate-limited."
             ]
         },
         {
@@ -83,10 +84,15 @@ notebook = {
             "metadata": {},
             "outputs": [],
             "source": [
-                "from data_manager import ensure_dataset, get_hf_token\n",
+                "from data_manager import ensure_dataset, get_hf_token, is_colab\n",
                 "\n",
-                "# Sync data\n",
-                "DATA_ROOT = ensure_dataset(repo_id=\"T40/edge-aui-framework-data\")\n",
+                "# Check Hugging Face authentication token\n",
+                "token = get_hf_token()\n",
+                "if token is None and is_colab():\n",
+                "    print(\"ℹ️ TIP: To ensure maximum rate limits, consider setting HF_TOKEN in Colab Secrets (🔑).\")\n",
+                "\n",
+                "# Synchronize datasets (handles rate limits, throttles requests, and auto-falls back to Git stream sync)\n",
+                "DATA_ROOT = ensure_dataset(repo_id=\"T40/edge-aui-framework-data\", token=token)\n",
                 "print(f\"[Data] Datasets verified at: {DATA_ROOT}\")"
             ]
         },

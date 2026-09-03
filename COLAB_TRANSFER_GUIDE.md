@@ -50,16 +50,38 @@ print(f"[Hardware] Active Execution Device: {device}")
 
 ---
 
-## 4. Hugging Face Authentication (Colab Secrets)
+## 4. Avoiding Hugging Face HTTP 429 Rate Limits (Colab Authentication)
 
-If your dataset repository (`T40/edge-aui-framework-data`) is private or gated:
-1. In Colab's left sidebar, click the **Secrets** icon (the key 🔑).
-2. Click **+ Add new secret**.
-3. Set the Name to: `HF_TOKEN`
-4. Paste your Hugging Face User Access Token (read permission) into Value.
-5. Toggle **Notebook access** to **ON**.
+### Why HTTP 429 Rate Limits Occur on Colab
+The interaction repository contains over **8,300 individual files** (continuous kinematics CSVs, DOM XMLs, action path JSONs). Google Colab instances share a public Google Cloud egress IP pool with thousands of other developers. When an unauthenticated notebook attempts to download 8,000+ files via concurrent REST API requests, Hugging Face's Cloudflare gateway triggers **HTTP 429 Too Many Requests**.
 
-The pipeline's `data_manager.py` will automatically detect and authenticate using Colab Secrets via `google.colab.userdata.get('HF_TOKEN')`. If the repository is public, no token is required.
+### Solution 1: Authenticate with `HF_TOKEN` in Colab Secrets (Recommended)
+Authenticated users receive dedicated personal rate limit quotas instead of sharing the congested anonymous Colab IP pool:
+1. Generate a free User Access Token (read permission) at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens).
+2. In Colab's left sidebar, click the **Secrets** icon (the key 🔑).
+3. Click **+ Add new secret**.
+4. Set Name: `HF_TOKEN`
+5. Paste your token into Value.
+6. Toggle **Notebook access** to **ON**.
+
+The pipeline automatically reads `HF_TOKEN` from Colab Secrets and applies it to all sync operations.
+
+### Solution 2: Automated Single-Stream Git Fallback
+`src/data_manager.py` has built-in 429 rate limit protection:
+- It throttles concurrent downloads (`max_workers=2`) to avoid burst detection.
+- If HTTP 429 is encountered, it automatically switches to a single-stream Git shallow clone (`git clone --depth 1`), transferring all 8,330 files in packfile streams without making individual REST API calls!
+
+### Solution 3: Direct 1-Line Git Clone in Colab
+If you prefer to pre-populate the data directly in a Colab code cell before running the pipeline:
+```bash
+!git clone --depth 1 https://huggingface.co/datasets/T40/edge-aui-framework-data .data/raw
+```
+If your repository is private:
+```python
+from google.colab import userdata
+token = userdata.get('HF_TOKEN')
+!git clone --depth 1 https://oauth2:{token}@huggingface.co/datasets/T40/edge-aui-framework-data .data/raw
+```
 
 ---
 

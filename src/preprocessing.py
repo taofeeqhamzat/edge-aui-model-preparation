@@ -365,6 +365,10 @@ if TORCH_AVAILABLE:
             elif data_root is None:
                 data_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".data", "raw"))
 
+            # Handle possible nested raw/ directory from Hugging Face Hub downloads
+            if not os.path.exists(os.path.join(data_root, "continuous-kinematics-2020")) and os.path.exists(os.path.join(data_root, "raw")):
+                data_root = os.path.join(data_root, "raw")
+
             self.data_root = data_root
             all_windows = []
 
