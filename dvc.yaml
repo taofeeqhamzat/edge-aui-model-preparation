@@ -1,0 +1,18 @@
+stages:
+  train:
+    cmd: python -c "import sys; sys.path.insert(0, 'src'); import training; training.DATA_DIR='.data/raw'; training.train_foundation_model()"
+    deps:
+      - src/training.py
+      - src/preprocessing.py
+      - .data/raw
+    outs:
+      - models/foundational_gru.pth
+
+  export:
+    cmd: python -c "import sys; sys.path.insert(0, 'src'); import export; export.export_and_quantize(model_path='models/foundational_gru.pth', output_dir='models')"
+    deps:
+      - src/export.py
+      - models/foundational_gru.pth
+    outs:
+      - models/model.onnx
+      - models/model_int8.onnx

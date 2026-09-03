@@ -1,0 +1,6 @@
+outs:
+- md5: e41f80accc81200d1ab05bfd5092c5e5.dir
+  size: 41026390
+  nfiles: 5885
+  hash: md5
+  path: continuous-kinematics-2020

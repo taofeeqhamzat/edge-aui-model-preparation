@@ -1,0 +1,6 @@
+outs:
+- md5: cebacaed186a16a2cfab9bfc30303be0.dir
+  size: 312256574
+  nfiles: 2428
+  hash: md5
+  path: client-side-action-paths-2021
