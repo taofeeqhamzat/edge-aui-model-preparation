@@ -1,0 +1,13 @@
+dvc
+dvc-s3
+huggingface_hub
+datasets
+torch
+pandas
+numpy
+matplotlib
+seaborn
+onnxruntime
+onnx
+scikit-learn
+jupyter
