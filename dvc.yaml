@@ -4,6 +4,7 @@ stages:
     deps:
       - src/training.py
       - src/preprocessing.py
+      - src/data_manager.py
       - .data/raw
     outs:
       - models/foundational_gru.pth
@@ -12,6 +13,7 @@ stages:
     cmd: python -c "import sys; sys.path.insert(0, 'src'); import export; export.export_and_quantize(model_path='models/foundational_gru.pth', output_dir='models')"
     deps:
       - src/export.py
+      - src/data_manager.py
       - models/foundational_gru.pth
     outs:
       - models/model.onnx
