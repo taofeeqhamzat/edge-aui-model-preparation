@@ -1,0 +1,6 @@
+outs:
+- md5: 6cba6fbcf3cc9b128fe4f41b19a8db96.dir
+  size: 1016125
+  nfiles: 6
+  hash: md5
+  path: structural-hmi-sequences-2023
