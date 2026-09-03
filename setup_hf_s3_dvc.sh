@@ -17,6 +17,8 @@ echo "Configuring DVC remote 'hfremote' via Hugging Face S3 Gateway..."
 dvc remote add -d -f hfremote s3://${HF_DATASET}/${DVC_STORE_PATH}
 dvc remote modify hfremote endpointurl https://s3.hf.co/${HF_ORG}
 dvc remote modify hfremote region us-east-1
+dvc remote modify hfremote jobs 2
+
 
 echo ""
 echo "=== DVC Remote Successfully Configured ==="

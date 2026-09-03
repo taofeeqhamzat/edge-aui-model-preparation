@@ -10,3 +10,5 @@
     url = s3://edge-aui-framework-data/dvc-store
     endpointurl = https://s3.hf.co/T40
     region = us-east-1
+    jobs = 2
+
