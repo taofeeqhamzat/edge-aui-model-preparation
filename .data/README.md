@@ -1,9 +1,11 @@
 ---
 license: "cc-by-4.0"
 task_categories:
+  - tabular-classification
+  - other
+tags:
   - time-series-classification
   - sequence-modeling
-tags:
   - micro-interactions
   - UI-adaptation
   - behavioral-modeling
