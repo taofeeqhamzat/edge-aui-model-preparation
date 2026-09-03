@@ -9,5 +9,7 @@ matplotlib
 seaborn
 onnxruntime
 onnx
+onnxscript
 scikit-learn
 jupyter
+tqdm

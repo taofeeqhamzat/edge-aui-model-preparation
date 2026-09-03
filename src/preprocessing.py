@@ -221,9 +221,15 @@ def process_ck_session(
 def process_hvt_session(
     csv_path: str,
     window_size_ms: int = 500,
-    stride_ms: int = 250
+    stride_ms: int = 250,
+    max_rows: Optional[int] = 50000,
+    max_windows: Optional[int] = None
 ) -> List[Dict]:
-    df = pd.read_csv(csv_path, sep=";")
+    try:
+        df = pd.read_csv(csv_path, sep=";", nrows=max_rows)
+    except Exception:
+        return []
+
     if len(df) == 0:
         return []
     
@@ -237,6 +243,8 @@ def process_hvt_session(
     curr_time = start_time
     
     while curr_time + window_size_ms <= end_time:
+        if max_windows is not None and len(samples) >= max_windows:
+            break
         win_end = curr_time + window_size_ms
         window_df = df[(df["timestamp"] >= curr_time) & (df["timestamp"] < win_end)]
         
@@ -318,54 +326,99 @@ def process_action_paths(json_path: str) -> List[Dict]:
 # 6. PyTorch Dataset Implementation
 # ============================================================================
 
+try:
+    from data_manager import ensure_dataset
+except ImportError:
+    try:
+        from src.data_manager import ensure_dataset
+    except ImportError:
+        ensure_dataset = None
+
 if TORCH_AVAILABLE:
     class MicroInteractionSequenceDataset(Dataset):
         def __init__(
             self,
-            data_root: str,
+            data_root: Optional[str] = None,
             seq_len: int = 8,
             window_size_ms: int = 500,
             stride_ms: int = 250,
-            prediction_horizon_ms: int = 1500
+            prediction_horizon_ms: int = 1500,
+            hf_repo_id: str = "T40/edge-aui-framework-data",
+            hf_token: Optional[str] = None,
+            max_sequences: Optional[int] = None,
+            max_files_per_dataset: Optional[int] = None,
+            allow_patterns: Optional[List[str]] = None
         ):
             self.seq_len = seq_len
             self.samples_X = []
             self.samples_Y = []
 
+            # Resolve local data directory or auto-sync from Hugging Face Hub
+            if ensure_dataset is not None:
+                if data_root is None or not os.path.exists(data_root) or not any(os.scandir(data_root)):
+                    data_root = ensure_dataset(
+                        data_dir=data_root,
+                        repo_id=hf_repo_id,
+                        token=hf_token,
+                        allow_patterns=allow_patterns
+                    )
+            elif data_root is None:
+                data_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".data", "raw"))
+
+            self.data_root = data_root
             all_windows = []
+
+            def _enough_windows():
+                return max_sequences is not None and len(all_windows) >= max_sequences + seq_len
 
             # 1. Continuous Kinematics (CK)
             ck_dir = os.path.join(data_root, "continuous-kinematics-2020", "logs")
-            if os.path.exists(ck_dir):
+            if os.path.exists(ck_dir) and not _enough_windows():
                 ck_files = glob.glob(os.path.join(ck_dir, "*.csv"))
+                if max_files_per_dataset:
+                    ck_files = ck_files[:max_files_per_dataset]
                 for csv_path in ck_files:
                     windows = process_ck_session(csv_path, window_size_ms, stride_ms, prediction_horizon_ms)
                     all_windows.extend(windows)
+                    if _enough_windows():
+                        break
             
             # 2. High-Volume Trajectories (HVT)
             hvt_dir = os.path.join(data_root, "high-volume-trajectories-20226")
-            if os.path.exists(hvt_dir):
+            if os.path.exists(hvt_dir) and not _enough_windows():
                 # Search recursively for csv
                 hvt_files = glob.glob(os.path.join(hvt_dir, "**", "*.csv"), recursive=True)
+                if max_files_per_dataset:
+                    hvt_files = hvt_files[:max_files_per_dataset]
                 for csv_path in hvt_files:
                     windows = process_hvt_session(csv_path, window_size_ms, stride_ms)
                     all_windows.extend(windows)
+                    if _enough_windows():
+                        break
                     
             # 3. Structural HMI Sequences
             hmi_dir = os.path.join(data_root, "structural-hmi-sequences-2023")
-            if os.path.exists(hmi_dir):
+            if os.path.exists(hmi_dir) and not _enough_windows():
                 hmi_files = glob.glob(os.path.join(hmi_dir, "*.csv"))
+                if max_files_per_dataset:
+                    hmi_files = hmi_files[:max_files_per_dataset]
                 for csv_path in hmi_files:
                     windows = process_hmi_sequences(csv_path)
                     all_windows.extend(windows)
+                    if _enough_windows():
+                        break
 
             # 4. Client-Side Action Paths
             ap_dir = os.path.join(data_root, "client-side-action-paths-2021")
-            if os.path.exists(ap_dir):
+            if os.path.exists(ap_dir) and not _enough_windows():
                 ap_files = glob.glob(os.path.join(ap_dir, "**", "*.json"), recursive=True)
+                if max_files_per_dataset:
+                    ap_files = ap_files[:max_files_per_dataset]
                 for json_path in ap_files:
                     windows = process_action_paths(json_path)
                     all_windows.extend(windows)
+                    if _enough_windows():
+                        break
 
             if len(all_windows) >= seq_len:
                 feature_matrix = np.stack([w["features"] for w in all_windows])
@@ -378,6 +431,10 @@ if TORCH_AVAILABLE:
                     self.samples_Y.append(target_y)
 
             if len(self.samples_X) > 0:
+                if max_sequences is not None and len(self.samples_X) > max_sequences:
+                    self.samples_X = self.samples_X[:max_sequences]
+                    self.samples_Y = self.samples_Y[:max_sequences]
+
                 self.samples_X = torch.tensor(np.array(self.samples_X), dtype=torch.float32)
                 self.samples_Y = torch.tensor(np.array(self.samples_Y), dtype=torch.long)
             else:
