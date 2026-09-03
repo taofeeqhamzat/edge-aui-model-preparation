@@ -71,20 +71,70 @@ DATASET_SUBDIRS = [
 
 def is_dataset_present(data_dir: str or Path) -> bool:
     """
-    Check if the target raw data directory exists and contains recognizable interaction datasets.
+    Check if the target raw data directory exists and contains recognizable interaction datasets,
+    either directly or nested within a 'raw/' subfolder.
     """
     p = Path(data_dir)
     if not p.is_dir():
         return False
 
-    # Check for presence of any of the expected datasets with non-empty files
-    found_count = 0
-    for subdir in DATASET_SUBDIRS:
-        subpath = p / subdir
-        if subpath.is_dir() and any(subpath.iterdir()):
-            found_count += 1
+    for check_path in [p, p / "raw", p / ".data" / "raw"]:
+        if not check_path.is_dir():
+            continue
+        found_count = 0
+        for subdir in DATASET_SUBDIRS:
+            subpath = check_path / subdir
+            if subpath.is_dir() and any(subpath.iterdir()):
+                found_count += 1
+        if found_count > 0:
+            return True
 
-    return found_count > 0
+    return False
+
+
+def resolve_dataset_root(data_dir: str or Path) -> str:
+    """
+    Locate the root directory where the 4 interaction datasets actually live.
+    Checks data_dir, data_dir/raw, data_dir/.data/raw, and parent directories.
+    """
+    p = Path(data_dir).resolve()
+    candidates = [
+        p,
+        p / "raw",
+        p / ".data" / "raw",
+        p.parent / "raw",
+    ]
+    for c in candidates:
+        if c.is_dir() and any((c / subdir).is_dir() and any((c / subdir).iterdir()) for subdir in DATASET_SUBDIRS):
+            return str(c)
+    return str(p)
+
+
+def find_dataset_dir(root: str or Path, dataset_name: str) -> str:
+    """
+    Dynamically find the directory for a specific dataset within root,
+    handling any nesting like root/name, root/raw/name, root/.data/raw/name.
+    """
+    p = Path(root).resolve()
+    candidates = [
+        p / dataset_name,
+        p / "raw" / dataset_name,
+        p / ".data" / "raw" / dataset_name,
+        p.parent / dataset_name,
+        p.parent / "raw" / dataset_name
+    ]
+    for c in candidates:
+        if c.is_dir() and any(c.iterdir()):
+            return str(c)
+
+    # Recursive search fallback
+    pattern = os.path.join(str(p), "**", dataset_name)
+    matches = glob.glob(pattern, recursive=True)
+    for m in matches:
+        if os.path.isdir(m) and any(os.scandir(m)):
+            return m
+
+    return str(p / dataset_name)
 
 
 # ============================================================================
@@ -200,9 +250,10 @@ def ensure_dataset(
     target_path.mkdir(parents=True, exist_ok=True)
 
     if not force_download and is_dataset_present(target_path):
-        print(f"[DataManager] Verified local datasets at: {target_path}")
         flatten_nested_raw(target_path)
-        return str(target_path)
+        resolved = resolve_dataset_root(target_path)
+        print(f"[DataManager] Verified local datasets at: {resolved}")
+        return resolved
 
     auth_token = get_hf_token(token)
     if auth_token is None and (is_colab() or is_kaggle()):
@@ -216,7 +267,7 @@ def ensure_dataset(
     if method == "git":
         if sync_via_git(repo_id, target_path, auth_token):
             flatten_nested_raw(target_path)
-            return str(target_path)
+            return resolve_dataset_root(target_path)
 
     # Strategy 2: Throttled snapshot download with 429 fallback
     print(f"[DataManager] Syncing from Hugging Face Hub: '{repo_id}' (workers={max_workers})...")
@@ -233,8 +284,9 @@ def ensure_dataset(
             max_workers=max_workers
         )
         flatten_nested_raw(Path(downloaded_dir))
-        print(f"[DataManager] Successfully synchronized datasets to: {downloaded_dir}")
-        return str(downloaded_dir)
+        resolved = resolve_dataset_root(downloaded_dir)
+        print(f"[DataManager] Successfully synchronized datasets to: {resolved}")
+        return resolved
 
     except Exception as e:
         error_msg = str(e)
@@ -246,19 +298,20 @@ def ensure_dataset(
             print("[DataManager] Switching to single-stream Git clone fallback...")
             if sync_via_git(repo_id, target_path, auth_token):
                 flatten_nested_raw(target_path)
-                return str(target_path)
+                return resolve_dataset_root(target_path)
 
         if is_dataset_present(target_path):
-            print(f"[DataManager] Using partially downloaded or cached files at {target_path}.")
             flatten_nested_raw(target_path)
-            return str(target_path)
+            resolved = resolve_dataset_root(target_path)
+            print(f"[DataManager] Using partially downloaded or cached files at {resolved}.")
+            return resolved
         else:
             print(
                 "[DataManager] 💡 TIP: To permanently bypass Colab rate limits:\n"
                 "   1. Set HF_TOKEN in Colab Secrets (🔑) with a free read token from https://huggingface.co/settings/tokens\n"
                 "   2. Or run: !git clone --depth 1 https://huggingface.co/datasets/T40/edge-aui-framework-data .data/raw\n"
             )
-            return str(target_path)
+            return resolve_dataset_root(target_path)
 
 
 def load_hosted_dataset(

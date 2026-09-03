@@ -223,7 +223,9 @@ def process_hvt_session(
     window_size_ms: int = 500,
     stride_ms: int = 250,
     max_rows: Optional[int] = 50000,
-    max_windows: Optional[int] = None
+    max_windows: Optional[int] = None,
+    *args,
+    **kwargs
 ) -> List[Dict]:
     try:
         df = pd.read_csv(csv_path, sep=";", nrows=max_rows)
@@ -280,12 +282,19 @@ def process_hvt_session(
 # 5. Structural Grounding Processing (HMI & Action Paths)
 # ============================================================================
 
-def process_hmi_sequences(csv_path: str) -> List[Dict]:
-    df = pd.read_csv(csv_path, sep=";")
+def process_hmi_sequences(csv_path: str, max_records: Optional[int] = 500, *args, **kwargs) -> List[Dict]:
+    try:
+        df = pd.read_csv(csv_path, sep=";", nrows=max_records)
+        if "epoch" not in df and "initepoch" not in df:
+            df = pd.read_csv(csv_path, sep=",", nrows=max_records)
+    except Exception:
+        return []
+
     samples = []
+    epoch_col = "epoch" if "epoch" in df else "initepoch" if "initepoch" in df else "timestamp" if "timestamp" in df else None
     
-    if len(df) > 0 and "epoch" in df:
-        df = df.sort_values("epoch")
+    if len(df) > 0 and epoch_col is not None:
+        df = df.sort_values(epoch_col)
         # Just map structural sequence into the feature space using categorical placeholders 
         # or modality masking.
         # Here we pad the continuous features with zeroes to indicate structural discrete events.
@@ -300,15 +309,34 @@ def process_hmi_sequences(csv_path: str) -> List[Dict]:
             
     return samples
 
-def process_action_paths(json_path: str) -> List[Dict]:
+def process_action_paths(json_path: str, *args, **kwargs) -> List[Dict]:
     samples = []
     try:
-        with open(json_path, "r") as f:
+        with open(json_path, "r", encoding="utf-8") as f:
             data = json.load(f)
             
-        for task in data:
+        items = []
+        if isinstance(data, list):
+            for entry in data:
+                if isinstance(entry, dict):
+                    if "clickstream" in entry and isinstance(entry["clickstream"], list):
+                        items.extend(entry["clickstream"])
+                    elif "actions" in entry and isinstance(entry["actions"], list):
+                        items.extend(entry["actions"])
+                    else:
+                        items.append(entry)
+        elif isinstance(data, dict):
+            for k, v in data.items():
+                if isinstance(v, list):
+                    items.extend(v)
+                elif isinstance(v, dict):
+                    items.append(v)
+
+        for task in items:
+            if not isinstance(task, dict):
+                continue
             if "stay_seconds" in task:
-                dwell_ms = task["stay_seconds"] * 1000.0
+                dwell_ms = float(task["stay_seconds"]) * 1000.0
                 
                 features = np.zeros(len(FEATURE_NAMES), dtype=np.float32)
                 features[5] = np.clip(dwell_ms / 500.0, 0.0, 1.0) # Map to dwellTimeMs
@@ -327,12 +355,14 @@ def process_action_paths(json_path: str) -> List[Dict]:
 # ============================================================================
 
 try:
-    from data_manager import ensure_dataset
+    from data_manager import ensure_dataset, find_dataset_dir, resolve_dataset_root
 except ImportError:
     try:
-        from src.data_manager import ensure_dataset
+        from src.data_manager import ensure_dataset, find_dataset_dir, resolve_dataset_root
     except ImportError:
         ensure_dataset = None
+        find_dataset_dir = lambda root, name: os.path.join(str(root), name)
+        resolve_dataset_root = lambda p: str(p)
 
 if TORCH_AVAILABLE:
     class MicroInteractionSequenceDataset(Dataset):
@@ -365,10 +395,7 @@ if TORCH_AVAILABLE:
             elif data_root is None:
                 data_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".data", "raw"))
 
-            # Handle possible nested raw/ directory from Hugging Face Hub downloads
-            if not os.path.exists(os.path.join(data_root, "continuous-kinematics-2020")) and os.path.exists(os.path.join(data_root, "raw")):
-                data_root = os.path.join(data_root, "raw")
-
+            data_root = resolve_dataset_root(data_root)
             self.data_root = data_root
             all_windows = []
 
@@ -376,9 +403,9 @@ if TORCH_AVAILABLE:
                 return max_sequences is not None and len(all_windows) >= max_sequences + seq_len
 
             # 1. Continuous Kinematics (CK)
-            ck_dir = os.path.join(data_root, "continuous-kinematics-2020", "logs")
+            ck_dir = find_dataset_dir(data_root, "continuous-kinematics-2020")
             if os.path.exists(ck_dir) and not _enough_windows():
-                ck_files = glob.glob(os.path.join(ck_dir, "*.csv"))
+                ck_files = glob.glob(os.path.join(ck_dir, "**", "*.csv"), recursive=True)
                 if max_files_per_dataset:
                     ck_files = ck_files[:max_files_per_dataset]
                 for csv_path in ck_files:
@@ -388,9 +415,8 @@ if TORCH_AVAILABLE:
                         break
             
             # 2. High-Volume Trajectories (HVT)
-            hvt_dir = os.path.join(data_root, "high-volume-trajectories-20226")
+            hvt_dir = find_dataset_dir(data_root, "high-volume-trajectories-20226")
             if os.path.exists(hvt_dir) and not _enough_windows():
-                # Search recursively for csv
                 hvt_files = glob.glob(os.path.join(hvt_dir, "**", "*.csv"), recursive=True)
                 if max_files_per_dataset:
                     hvt_files = hvt_files[:max_files_per_dataset]
@@ -401,9 +427,9 @@ if TORCH_AVAILABLE:
                         break
                     
             # 3. Structural HMI Sequences
-            hmi_dir = os.path.join(data_root, "structural-hmi-sequences-2023")
+            hmi_dir = find_dataset_dir(data_root, "structural-hmi-sequences-2023")
             if os.path.exists(hmi_dir) and not _enough_windows():
-                hmi_files = glob.glob(os.path.join(hmi_dir, "*.csv"))
+                hmi_files = glob.glob(os.path.join(hmi_dir, "**", "*.csv"), recursive=True)
                 if max_files_per_dataset:
                     hmi_files = hmi_files[:max_files_per_dataset]
                 for csv_path in hmi_files:
@@ -413,7 +439,7 @@ if TORCH_AVAILABLE:
                         break
 
             # 4. Client-Side Action Paths
-            ap_dir = os.path.join(data_root, "client-side-action-paths-2021")
+            ap_dir = find_dataset_dir(data_root, "client-side-action-paths-2021")
             if os.path.exists(ap_dir) and not _enough_windows():
                 ap_files = glob.glob(os.path.join(ap_dir, "**", "*.json"), recursive=True)
                 if max_files_per_dataset:

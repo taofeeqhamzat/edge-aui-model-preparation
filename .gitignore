@@ -1,5 +1,7 @@
 instructions.md
 secret.txt
+.env*
+.venv/
 __pycache__/
 *.pyc
 models/
