@@ -39,6 +39,7 @@ def get_hf_token(token: Optional[str] = None) -> Optional[str]:
 
     if is_colab():
         try:
+            # pyrefly: ignore [missing-import]
             from google.colab import userdata
             return userdata.get("HF_TOKEN")
         except Exception:
@@ -69,6 +70,7 @@ DATASET_SUBDIRS = [
     "client-side-action-paths-2021"
 ]
 
+# pyrefly: ignore [invalid-annotation]
 def is_dataset_present(data_dir: str or Path) -> bool:
     """
     Check if the target raw data directory exists and contains recognizable interaction datasets,
@@ -92,6 +94,7 @@ def is_dataset_present(data_dir: str or Path) -> bool:
     return False
 
 
+# pyrefly: ignore [invalid-annotation]
 def resolve_dataset_root(data_dir: str or Path) -> str:
     """
     Locate the root directory where the 4 interaction datasets actually live.
@@ -110,6 +113,7 @@ def resolve_dataset_root(data_dir: str or Path) -> str:
     return str(p)
 
 
+# pyrefly: ignore [invalid-annotation]
 def find_dataset_dir(root: str or Path, dataset_name: str) -> str:
     """
     Dynamically find the directory for a specific dataset within root,

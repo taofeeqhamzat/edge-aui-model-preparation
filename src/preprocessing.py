@@ -8,6 +8,7 @@ import os
 import glob
 import math
 import json
+import sys
 import xml.etree.ElementTree as ET
 from typing import List, Dict, Tuple, Optional
 
@@ -55,6 +56,7 @@ def load_raw_kinematics_csv(csv_path: str) -> pd.DataFrame:
     return df
 
 
+
 # ============================================================================
 # 2. MicroTensor Vectorizer (500 ms Window Extraction)
 # ============================================================================
@@ -82,67 +84,128 @@ LABEL_MAP = {
 
 def compute_window_microtensor(
     window_df: pd.DataFrame,
-    viewport: Tuple[float, float],
-    document: Tuple[float, float],
-    window_duration_ms: float = 500.0
+    viewport: Tuple[float, float] = (1366.0, 768.0),
+    document: Tuple[float, float] = (1366.0, 2000.0),
+    window_duration_ms: float = 500.0,
+    dataset_type: str = "ck"
 ) -> np.ndarray:
     vp_w, vp_h = viewport
     doc_w, doc_h = document
-
-    mouse_events = window_df[
-        window_df["event"].isin(["mousemove", "mouseover", "mousedown", "mouseup", "click"])
-    ].copy()
 
     mean_vel = 0.0
     max_vel = 0.0
     mean_accel = 0.0
     hesitation_cnt = 0.0
     total_traj_len = 0.0
+    dwell_time_ms = 0.0
+    scroll_depth_pct = 0.0
+    scroll_vel = 0.0
     entropy = 0.0
 
-    if len(mouse_events) >= 2:
-        x_norm = mouse_events["xpos"].values / max(vp_w, 1.0)
-        y_norm = mouse_events["ypos"].values / max(vp_h, 1.0)
-        t_ms = mouse_events["timestamp"].values.astype(np.float64)
+    # Dataset conditional block: High-Volume Trajectories (HVT)
+    if dataset_type.lower() in ["hvt", "high-volume-trajectories-20226"] or ("velocity" in window_df.columns and "xpos" not in window_df.columns):
+        # 1. Unit harmonization: convert raw timestamps from microseconds (us) to milliseconds (ms)
+        t_raw = window_df["timestamp"].values.astype(np.float64)
+        t_ms = t_raw / 1000.0
 
-        dx_px = np.diff(x_norm) * vp_w
-        dy_px = np.diff(y_norm) * vp_h
-        dt_ms = np.diff(t_ms)
-        dt_ms = np.where(dt_ms <= 0, 1.0, dt_ms)
+        # 2. Unit harmonization: convert raw velocity from px/s to px/ms
+        if "velocity" in window_df.columns:
+            vel_series = window_df["velocity"].dropna()
+            vel_px_ms = vel_series.values.astype(np.float64) / 1000.0  # px/s -> px/ms
+        else:
+            vel_px_ms = np.array([], dtype=np.float64)
 
-        distances = np.sqrt(dx_px**2 + dy_px**2)
-        total_traj_len = float(np.sum(distances))
+        if len(vel_px_ms) > 0:
+            mean_vel = float(np.mean(vel_px_ms))
+            max_vel = float(np.max(vel_px_ms))
 
-        velocities = distances / dt_ms
-        mean_vel = float(np.mean(velocities))
-        max_vel = float(np.max(velocities))
-
-        if len(velocities) >= 2:
-            accels = np.abs(np.diff(velocities)) / dt_ms[1:]
+        # Acceleration derived from velocity deltas and time intervals (px/ms^2)
+        if len(vel_px_ms) >= 2:
+            vel_indices = vel_series.index
+            vel_t_ms = t_ms[window_df.index.get_indexer(vel_indices)]
+            dt_ms = np.diff(vel_t_ms)
+            dt_ms = np.where(dt_ms <= 0, 1.0, dt_ms)
+            accels = np.abs(np.diff(vel_px_ms)) / dt_ms
             mean_accel = float(np.mean(accels))
 
-        angles = np.arctan2(dy_px, dx_px)
-        angle_diffs = np.abs(np.diff(angles))
-        angle_diffs = np.where(angle_diffs > np.pi, 2 * np.pi - angle_diffs, angle_diffs)
-        hesitation_cnt = float(np.sum(angle_diffs > (np.pi / 4.0)))
+        # Directional hesitation count and entropy from angles
+        if "angle" in window_df.columns:
+            angles = window_df["angle"].dropna().values.astype(np.float64)
+            if len(angles) >= 2:
+                angle_diffs = np.abs(np.diff(angles))
+                angle_diffs = np.where(angle_diffs > 180.0, 360.0 - angle_diffs, angle_diffs)
+                hesitation_cnt = float(np.sum(angle_diffs > 45.0))
 
-        hist, _ = np.histogram(angles, bins=8, range=(-np.pi, np.pi), density=False)
-        hist = hist / max(hist.sum(), 1)
-        hist = hist[hist > 0]
-        if len(hist) > 0:
-            entropy = float(-np.sum(hist * np.log2(hist)) / math.log2(8))
+                hist, _ = np.histogram(angles, bins=8, range=(-180.0, 180.0), density=False)
+                hist = hist / max(hist.sum(), 1)
+                hist = hist[hist > 0]
+                if len(hist) > 0:
+                    entropy = float(-np.sum(hist * np.log2(hist)) / math.log2(8))
 
-    hover_events = window_df[window_df["event"] == "mouseover"]
-    dwell_time_ms = float(len(hover_events) * 50.0)
+        if "distance" in window_df.columns:
+            total_traj_len = float(window_df["distance"].dropna().sum())
 
-    scroll_events = window_df[window_df["event"] == "scroll"]
-    scroll_cnt = len(scroll_events)
-    scroll_vel = (scroll_cnt * 100.0) / window_duration_ms
-    max_scrollable = max(doc_h - vp_h, 1.0)
-    scroll_depth_pct = min(100.0, (scroll_cnt * 50.0 / max_scrollable) * 100.0)
+        if "duration" in window_df.columns:
+            dwell_time_ms = float(window_df["duration"].dropna().sum())
 
+        # Scroll fields are absent in HVT (modality mask padding)
+        scroll_depth_pct = 0.0
+        scroll_vel = 0.0
+
+    else:
+        # Continuous Kinematics (CK)
+        mouse_events = window_df[
+            window_df["event"].isin(["mousemove", "mouseover", "mousedown", "mouseup", "click"])
+        ].copy()
+
+        # Kinematic smoothing: enforce len(mouse_events) >= 3 for valid displacement & acceleration
+        if len(mouse_events) >= 3:
+            # pyrefly: ignore [unsupported-operation]
+            x_norm = mouse_events["xpos"].values / max(vp_w, 1.0)
+            # pyrefly: ignore [unsupported-operation]
+            y_norm = mouse_events["ypos"].values / max(vp_h, 1.0)
+            t_ms = mouse_events["timestamp"].values.astype(np.float64)
+
+            dx_px = np.diff(x_norm) * vp_w
+            dy_px = np.diff(y_norm) * vp_h
+            # pyrefly: ignore [no-matching-overload]
+            dt_ms = np.diff(t_ms)
+            dt_ms = np.where(dt_ms <= 0, 1.0, dt_ms)
+
+            distances = np.sqrt(dx_px**2 + dy_px**2)
+            total_traj_len = float(np.sum(distances))
+
+            velocities = distances / dt_ms
+            mean_vel = float(np.mean(velocities))
+            max_vel = float(np.max(velocities))
+
+            if len(velocities) >= 2:
+                accels = np.abs(np.diff(velocities)) / dt_ms[1:]
+                mean_accel = float(np.mean(accels))
+
+            angles = np.arctan2(dy_px, dx_px)
+            angle_diffs = np.abs(np.diff(angles))
+            angle_diffs = np.where(angle_diffs > np.pi, 2 * np.pi - angle_diffs, angle_diffs)
+            hesitation_cnt = float(np.sum(angle_diffs > (np.pi / 4.0)))
+
+            hist, _ = np.histogram(angles, bins=8, range=(-np.pi, np.pi), density=False)
+            hist = hist / max(hist.sum(), 1)
+            hist = hist[hist > 0]
+            if len(hist) > 0:
+                entropy = float(-np.sum(hist * np.log2(hist)) / math.log2(8))
+
+        hover_events = window_df[window_df["event"] == "mouseover"]
+        dwell_time_ms = float(len(hover_events) * 50.0)
+
+        scroll_events = window_df[window_df["event"] == "scroll"]
+        scroll_cnt = len(scroll_events)
+        scroll_vel = (scroll_cnt * 100.0) / window_duration_ms
+        max_scrollable = max(doc_h - vp_h, 1.0)
+        scroll_depth_pct = min(100.0, (scroll_cnt * 50.0 / max_scrollable) * 100.0)
+
+    # Symmetric scaling: divide both meanVelocity and maxVelocity by 10.0
     features = np.array([
-        np.clip(mean_vel / 5.0, 0.0, 1.0),
+        np.clip(mean_vel / 10.0, 0.0, 1.0),
         np.clip(max_vel / 10.0, 0.0, 1.0),
         np.clip(mean_accel / 0.1, 0.0, 1.0),
         np.clip(hesitation_cnt / 10.0, 0.0, 1.0),
@@ -164,7 +227,7 @@ def process_ck_session(
     window_size_ms: int = 500,
     stride_ms: int = 250,
     prediction_horizon_ms: int = 1500,
-    min_events_per_window: int = 2
+    min_events_per_window: int = 3
 ) -> List[Dict]:
     xml_path = csv_path.replace(".csv", ".xml")
     viewport, document = parse_viewport_metadata(xml_path)
@@ -185,7 +248,7 @@ def process_ck_session(
 
         if len(window_df) >= min_events_per_window:
             micro_tensor = compute_window_microtensor(
-                window_df, viewport, document, window_duration_ms=window_size_ms
+                window_df, viewport, document, window_duration_ms=window_size_ms, dataset_type="ck"
             )
 
             horizon_end = win_end + prediction_horizon_ms
@@ -224,6 +287,7 @@ def process_hvt_session(
     stride_ms: int = 250,
     max_rows: Optional[int] = 50000,
     max_windows: Optional[int] = None,
+    min_events_per_window: int = 3,
     *args,
     **kwargs
 ) -> List[Dict]:
@@ -234,48 +298,65 @@ def process_hvt_session(
 
     if len(df) == 0:
         return []
-    
-    # Generate synthetic timeline since exact epoch is not always robustly parsed
-    df["timestamp"] = np.arange(len(df)) * 50.0  # Approx 50ms per record
-    
-    start_time = df["timestamp"].min()
-    end_time = df["timestamp"].max()
-    
+
+    # Parse raw timestamp in microseconds (us) from local_date and local_time
+    if "local_time" in df.columns:
+        try:
+            if "local_date" in df.columns:
+                dt = pd.to_datetime(df["local_date"].astype(str) + " " + df["local_time"].astype(str), format="ISO8601")
+            else:
+                dt = pd.to_datetime(df["local_time"].astype(str), format="ISO8601")
+            df["timestamp"] = (dt.astype("int64") // 1000).astype(np.float64)  # microseconds (us)
+        except Exception:
+            df["timestamp"] = np.arange(len(df)) * 50000.0  # fallback: 50ms in us
+    elif "timestamp" not in df.columns:
+        df["timestamp"] = np.arange(len(df)) * 50000.0  # fallback: 50ms in us
+
+    df = df.sort_values("timestamp").reset_index(drop=True)
+    ts_values = df["timestamp"].values
+
+    window_size_us = window_size_ms * 1000.0
+    stride_us = stride_ms * 1000.0
+
+    curr_time = float(ts_values[0])
+    end_time = float(ts_values[-1])
+
     samples = []
-    curr_time = start_time
-    
-    while curr_time + window_size_ms <= end_time:
+    while curr_time + window_size_us <= end_time:
         if max_windows is not None and len(samples) >= max_windows:
             break
-        win_end = curr_time + window_size_ms
-        window_df = df[(df["timestamp"] >= curr_time) & (df["timestamp"] < win_end)]
-        
-        if len(window_df) >= 2:
-            # Calculate features from available columns
-            mean_vel = window_df["velocity"].mean() if "velocity" in window_df else 0.0
-            max_vel = window_df["velocity"].max() if "velocity" in window_df else 0.0
-            
-            # HVT lacks absolute coordinates and scroll fields, apply modality mask padding
-            # Pad scrolling and missing info with 0
-            features = np.array([
-                np.clip(mean_vel / 5.0, 0.0, 1.0),
-                np.clip(max_vel / 10.0, 0.0, 1.0),
-                0.0, # meanAccel
-                0.0, # hesitationCount
-                np.clip(window_df["distance"].sum() / 2000.0, 0.0, 1.0) if "distance" in window_df else 0.0,
-                0.0, # dwellTimeMs
-                0.0, # scrollDepth
-                0.0, # scrollVelocity
-                0.0  # entropy
-            ], dtype=np.float32)
-            
+
+        win_end = curr_time + window_size_us
+        i_start = int(np.searchsorted(ts_values, curr_time, side="left"))
+        i_end = int(np.searchsorted(ts_values, win_end, side="left"))
+
+        if i_end - i_start >= min_events_per_window:
+            window_df = df.iloc[i_start:i_end]
+            micro_tensor = compute_window_microtensor(
+                window_df,
+                viewport=(1920.0, 1080.0),
+                document=(1920.0, 1080.0),
+                window_duration_ms=window_size_ms,
+                dataset_type="hvt"
+            )
+
             samples.append({
-                "features": features,
-                "label": LABEL_MAP["IDLE"] # Auto-label mostly generic motion in HVT
+                "window_start": curr_time / 1000.0,
+                "window_end": win_end / 1000.0,
+                "features": micro_tensor,
+                "label": LABEL_MAP["IDLE"]  # Auto-label mostly generic motion in HVT
             })
-            
-        curr_time += stride_ms
-        
+            curr_time += stride_us
+        else:
+            if i_start < len(ts_values) - 1:
+                next_t = float(ts_values[i_start + 1])
+                if next_t > curr_time + stride_us:
+                    curr_time = next_t
+                else:
+                    curr_time += stride_us
+            else:
+                break
+
     return samples
 
 # ============================================================================
@@ -358,6 +439,7 @@ try:
     from data_manager import ensure_dataset, find_dataset_dir, resolve_dataset_root
 except ImportError:
     try:
+        # pyrefly: ignore [missing-import]
         from src.data_manager import ensure_dataset, find_dataset_dir, resolve_dataset_root
     except ImportError:
         ensure_dataset = None
@@ -426,29 +508,9 @@ if TORCH_AVAILABLE:
                     if _enough_windows():
                         break
                     
-            # 3. Structural HMI Sequences
-            hmi_dir = find_dataset_dir(data_root, "structural-hmi-sequences-2023")
-            if os.path.exists(hmi_dir) and not _enough_windows():
-                hmi_files = glob.glob(os.path.join(hmi_dir, "**", "*.csv"), recursive=True)
-                if max_files_per_dataset:
-                    hmi_files = hmi_files[:max_files_per_dataset]
-                for csv_path in hmi_files:
-                    windows = process_hmi_sequences(csv_path)
-                    all_windows.extend(windows)
-                    if _enough_windows():
-                        break
-
-            # 4. Client-Side Action Paths
-            ap_dir = find_dataset_dir(data_root, "client-side-action-paths-2021")
-            if os.path.exists(ap_dir) and not _enough_windows():
-                ap_files = glob.glob(os.path.join(ap_dir, "**", "*.json"), recursive=True)
-                if max_files_per_dataset:
-                    ap_files = ap_files[:max_files_per_dataset]
-                for json_path in ap_files:
-                    windows = process_action_paths(json_path)
-                    all_windows.extend(windows)
-                    if _enough_windows():
-                        break
+            # Note: Discrete UI logs (structural-hmi-sequences-2023 and client-side-action-paths-2021)
+            # are excluded from continuous MicroTensor sequence extraction to avoid category errors
+            # and artificial collinearity. They are reserved for deterministic Fast Gate (PrefixSpan) benchmarking.
 
             if len(all_windows) >= seq_len:
                 feature_matrix = np.stack([w["features"] for w in all_windows])
@@ -474,5 +536,35 @@ if TORCH_AVAILABLE:
         def __len__(self) -> int:
             return len(self.samples_Y)
 
+        # pyrefly: ignore [bad-override-param-name]
         def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
             return self.samples_X[idx], self.samples_Y[idx]
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+            print("Usage: python preprocessing.py <function_name> <data_root> <optional function arguments>")
+            sys.exit(1)
+    else:
+        arg = sys.argv[1]
+        if arg == "parse_viewport_metadata":
+            parsed_viewport_metadata = parse_viewport_metadata(sys.argv[2])
+            print(f"viewport_metadata: {parsed_viewport_metadata}")
+        elif arg == "process_action_paths":
+            print(f"[Preprocessing] Processing action paths: {sys.argv[2]}")
+            processed_action_paths = process_action_paths(sys.argv[2])
+            print(f"processed_action_paths: {processed_action_paths}")
+        elif arg == "process_ck_session":
+            print(f"[Preprocessing] Processing ck session: {sys.argv[2]}")
+            processed_ck_session = process_ck_session(sys.argv[2])
+            print(f"processed_ck_session: {processed_ck_session}")
+        elif arg == "process_hmi_sequences":
+            print(f"[Preprocessing] Processing hmi sequences: {sys.argv[2]}")
+            processed_hmi_sequences = process_hmi_sequences(sys.argv[2])
+            print(f"processed_hmi_sequences: {processed_hmi_sequences}")
+        elif arg == "process_hvt_session":
+            print(f"[Preprocessing] Processing hvt session: {sys.argv[2]}")
+            processed_hvt_session = process_hvt_session(sys.argv[2])
+            print(f"processed_hvt_session: {processed_hvt_session}")
+        else:
+            print("Usage: python preprocessing.py <function_name> <data_root> <optional function arguments>")
+            sys.exit(1)

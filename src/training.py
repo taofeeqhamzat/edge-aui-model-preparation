@@ -15,12 +15,14 @@ from torch.utils.data import DataLoader
 try:
     from preprocessing import MicroInteractionSequenceDataset, FEATURE_NAMES
 except ImportError:
+    # pyrefly: ignore [missing-import]
     from src.preprocessing import MicroInteractionSequenceDataset, FEATURE_NAMES
 
 try:
     from data_manager import find_project_root, is_colab, is_kaggle
 except ImportError:
     try:
+        # pyrefly: ignore [missing-import]
         from src.data_manager import find_project_root, is_colab, is_kaggle
     except ImportError:
         find_project_root = lambda: os.getcwd()

@@ -18,12 +18,14 @@ from onnxruntime.quantization import quantize_dynamic, QuantType
 try:
     from training import EdgeAUIGRU, FEATURE_NAMES, HIDDEN_DIM, NUM_LAYERS, NUM_CLASSES
 except ImportError:
+    # pyrefly: ignore [missing-import]
     from src.training import EdgeAUIGRU, FEATURE_NAMES, HIDDEN_DIM, NUM_LAYERS, NUM_CLASSES
 
 try:
     from data_manager import find_project_root
 except ImportError:
     try:
+        # pyrefly: ignore [missing-import]
         from src.data_manager import find_project_root
     except ImportError:
         find_project_root = lambda: os.getcwd()
@@ -78,6 +80,7 @@ def export_and_quantize(
     print(f"[Export] Exporting graph to ONNX: {onnx_path}")
     torch.onnx.export(
         model,
+        # pyrefly: ignore [bad-argument-type]
         dummy_input,
         onnx_path,
         export_params=True,
@@ -102,7 +105,9 @@ def export_and_quantize(
     
     # Assertions and benchmarking
     benchmark_metrics = benchmark_model(quantized_onnx_path, dummy_input.numpy())
+    # pyrefly: ignore [unsupported-operation]
     benchmark_metrics["onnx_path"] = onnx_path
+    # pyrefly: ignore [unsupported-operation]
     benchmark_metrics["quantized_onnx_path"] = quantized_onnx_path
     return benchmark_metrics
 
