@@ -1,64 +1,87 @@
 import json
 import os
+import subprocess
 
-notebook = {
-    "cells": [
-        {
-            "cell_type": "markdown",
-            "metadata": {},
-            "source": [
-                "# Exploratory Data Analysis: Edge-AUI Behavioral Datasets\n",
-                "\n",
-                "[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/taofeeqhamzat/edge-aui-model-preparation/blob/main/notebooks/EDA.ipynb)\n",
-                "\n",
-                "This notebook analyzes the continuous kinematic interaction datasets supporting the **Edge-AUI Framework** (Continuous Kinematics 2020 and High-Volume Trajectories 20226).\n",
-                "It extracts 9-dimensional MicroTensors across continuous datasets, evaluates unit harmonization and symmetric scaling, and visualizes feature distributions and correlation structures without discrete category distortion."
-            ]
-        },
-        {
-            "cell_type": "markdown",
-            "metadata": {},
-            "source": [
-                "## 1. Hosted Environment Setup & Dependency Installation\n",
-                "Detects Google Colab or Kaggle runtimes, installs dependencies, sets up module paths, and synchronizes hosted datasets from Hugging Face Hub (`T40/edge-aui-framework-data`)."
-            ]
-        },
-        {
-            "cell_type": "code",
-            "execution_count": None,
-            "metadata": {},
-            "outputs": [],
-            "source": [
-                "# Safe autoreload (Python 3.13 removed legacy 'imp' module used by older IPython)\n",
-                "try:\n",
-                "    ip = get_ipython()\n",
-                "    if ip is not None:\n",
-                "        ip.run_line_magic('load_ext', 'autoreload')\n",
-                "        ip.run_line_magic('autoreload', '2')\n",
-                "except Exception:\n",
-                "    pass\n",
-                "\n",
-                "import os\n",
-                "import sys\n",
-                "import glob\n",
-                "\n",
-                "# Environment detection\n",
-                "IN_COLAB = 'google.colab' in sys.modules or 'COLAB_GPU' in os.environ\n",
-                "IN_KAGGLE = 'KAGGLE_KERNEL_RUN_TYPE' in os.environ\n",
-                "\n",
-                "if IN_COLAB:\n",
-                "    print(\"[Environment] Running in Google Colab. Setting up dependencies...\")\n",
-                "    # Clone repo if executing standalone in Colab, or pull latest updates\n",
-                "    if not os.path.exists(\"src\") and not os.path.exists(\"../src\"):\n",
-                "        !git clone https://github.com/taofeeqhamzat/edge-aui-model-preparation.git\n",
-                "        %cd edge-aui-model-preparation\n",
-                "    else:\n",
-                "        # Sync latest commits if already cloned\n",
-                "        try:\n",
-                "            !git pull origin main\n",
-                "        except Exception:\n",
-                "            pass\n",
-                "    !pip install -q huggingface_hub datasets torch pandas numpy matplotlib seaborn onnx onnxruntime onnxscript scikit-learn tqdm\n",
+
+def get_current_branch(default: str = "main") -> str:
+    env_branch = os.environ.get("GITHUB_REF_NAME") or os.environ.get("GIT_BRANCH")
+    if env_branch:
+        return env_branch
+    try:
+        res = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        b = res.stdout.strip()
+        if b and b != "HEAD":
+            return b
+    except Exception:
+        pass
+    return default
+
+
+def create_eda_notebook(branch: str = "main") -> dict:
+    return {
+        "cells": [
+            {
+                "cell_type": "markdown",
+                "metadata": {},
+                "source": [
+                    "# Exploratory Data Analysis: Edge-AUI Behavioral Datasets\n",
+                    "\n",
+                    f"[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/taofeeqhamzat/edge-aui-model-preparation/blob/{branch}/notebooks/EDA.ipynb)\n",
+                    "\n",
+                    "This notebook analyzes the continuous kinematic interaction datasets supporting the **Edge-AUI Framework** (Continuous Kinematics 2020 and High-Volume Trajectories 20226).\n",
+                    "It extracts 9-dimensional MicroTensors across continuous datasets, evaluates unit harmonization and symmetric scaling, and visualizes feature distributions and correlation structures without discrete category distortion."
+                ]
+            },
+            {
+                "cell_type": "markdown",
+                "metadata": {},
+                "source": [
+                    "## 1. Hosted Environment Setup & Dependency Installation\n",
+                    "Detects Google Colab or Kaggle runtimes, installs dependencies, sets up module paths, and synchronizes hosted datasets from Hugging Face Hub (`T40/edge-aui-framework-data`)."
+                ]
+            },
+            {
+                "cell_type": "code",
+                "execution_count": None,
+                "metadata": {},
+                "outputs": [],
+                "source": [
+                    "# Safe autoreload (Python 3.13 removed legacy 'imp' module used by older IPython)\n",
+                    "try:\n",
+                    "    ip = get_ipython()\n",
+                    "    if ip is not None:\n",
+                    "        ip.run_line_magic('load_ext', 'autoreload')\n",
+                    "        ip.run_line_magic('autoreload', '2')\n",
+                    "except Exception:\n",
+                    "    pass\n",
+                    "\n",
+                    "import os\n",
+                    "import sys\n",
+                    "import glob\n",
+                    "\n",
+                    "# Environment detection\n",
+                    "IN_COLAB = 'google.colab' in sys.modules or 'COLAB_GPU' in os.environ\n",
+                    "IN_KAGGLE = 'KAGGLE_KERNEL_RUN_TYPE' in os.environ\n",
+                    "\n",
+                    "if IN_COLAB:\n",
+                    "    print(\"[Environment] Running in Google Colab. Setting up dependencies...\")\n",
+                    "    # Clone repo if executing standalone in Colab, or pull latest updates\n",
+                    "    if not os.path.exists(\"src\") and not os.path.exists(\"../src\"):\n",
+                    f"        !git clone -b {branch} https://github.com/taofeeqhamzat/edge-aui-model-preparation.git\n",
+                    "        %cd edge-aui-model-preparation\n",
+                    "    else:\n",
+                    "        # Sync latest commits if already cloned\n",
+                    "        try:\n",
+                    f"            !git checkout {branch}\n",
+                    f"            !git pull origin {branch}\n",
+                    "        except Exception:\n",
+                    "            pass\n",
+                    "    !pip install -q huggingface_hub datasets torch pandas numpy matplotlib seaborn onnx onnxruntime onnxscript scikit-learn tqdm\n",
                 "elif IN_KAGGLE:\n",
                 "    print(\"[Environment] Running in Kaggle. Setting up dependencies...\")\n",
                 "    !pip install -q huggingface_hub datasets torch pandas numpy matplotlib seaborn onnx onnxruntime scikit-learn tqdm\n",
@@ -262,10 +285,25 @@ notebook = {
     "nbformat_minor": 5
 }
 
+
+# Default module-level export targeting current branch
+current_branch = get_current_branch()
+notebook = create_eda_notebook(current_branch)
+
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Generate EDA notebook for Edge-AUI framework.")
+    parser.add_argument("--branch", default=None, help="Target git branch (defaults to current branch).")
+    args = parser.parse_args()
+
+    target_branch = args.branch if args.branch else get_current_branch()
+    print(f"[Generate EDA] Generating notebook targeting branch: '{target_branch}'")
+    nb = create_eda_notebook(target_branch)
+
     out_dir = "notebooks"
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "EDA.ipynb")
     with open(out_path, "w") as f:
-        json.dump(notebook, f, indent=4)
-    print(f"Successfully generated {out_path}")
+        json.dump(nb, f, indent=4)
+    print(f"Successfully generated {out_path} (branch: '{target_branch}')")
