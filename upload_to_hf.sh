@@ -16,8 +16,8 @@ echo "Authenticating Hugging Face CLI..."
 hf auth login
 
 echo "Uploading dataset from ${DATA_DIR} to Hugging Face Hub repository: ${HF_REPO}..."
-# Push the dataset files to the Hugging Face repository
-hf upload ${HF_REPO} ${DATA_DIR} --repo-type=dataset
+# Push the dataset files to the Hugging Face repository excluding any nested git control directories
+hf upload ${HF_REPO} ${DATA_DIR} --repo-type=dataset --exclude "**/.git/**"
 
 echo ""
 echo "Upload complete! The dataset can now be streamed programmatically in your Python pipeline using:"
