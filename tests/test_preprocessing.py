@@ -1,0 +1,93 @@
+"""
+test_preprocessing.py
+Unit tests for Layer A -> Layer B (Canonical Event Schema)
+and Layer B -> Layer C (MicroTensor Extraction with Modality Masking 2D=18).
+"""
+
+import os
+import sys
+import unittest
+import numpy as np
+
+# Add src to sys.path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
+
+import preprocessing
+
+
+class TestPreprocessingLayerAB(unittest.TestCase):
+    """Task 2.1: Canonical Event Schema & Viewport Normalization."""
+
+    def test_parse_viewport_metadata_fallback(self):
+        """Non-existent XML should fallback to default (1920x1080)."""
+        (vp_w, vp_h), (doc_w, doc_h) = preprocessing.parse_viewport_metadata("non_existent_file.xml")
+        self.assertEqual(vp_w, 1920.0)
+        self.assertEqual(vp_h, 1080.0)
+        self.assertEqual(doc_w, 1920.0)
+        self.assertEqual(doc_h, 2000.0)
+
+    def test_parse_adserp_session_bounds_and_types(self):
+        """Parse AdSERP session and verify [0, 1] bounds and semantic event types."""
+        events = preprocessing.parse_adserp_session("p004-b1-t1.csv")
+        self.assertGreater(len(events), 0)
+
+        event_types = set()
+        for ev in events:
+            # Bounds check
+            self.assertGreaterEqual(ev["x_norm"], 0.0)
+            self.assertLessEqual(ev["x_norm"], 1.0)
+            self.assertGreaterEqual(ev["y_norm"], 0.0)
+            self.assertLessEqual(ev["y_norm"], 1.0)
+
+            # Monotonic timestamps
+            self.assertIsInstance(ev["timestamp_ms"], int)
+            event_types.add(ev["event_type"])
+
+        # Retains semantic event types (mousemove, mouseover, load, etc.)
+        self.assertTrue("mousemove" in event_types or "mouseover" in event_types)
+
+
+class TestMicroTensorExtraction(unittest.TestCase):
+    """Task 2.2: MicroTensor Extraction with Modality Masking (2D=18)."""
+
+    def test_mock_microtensor_shape_and_bounds(self):
+        """Verify mock tensor shape is (seq_len, 18) and all values in [0, 1]."""
+        seq_len = 8
+        t = preprocessing.extract_mock_microtensor(seq_len=seq_len, has_scroll=True)
+        self.assertEqual(t.shape, (seq_len, 18))
+        self.assertFalse(np.isnan(t).any(), "Found NaN in MicroTensor")
+        self.assertFalse(np.isinf(t).any(), "Found Inf in MicroTensor")
+        self.assertTrue((t >= 0.0).all(), "Values below 0.0")
+        self.assertTrue((t <= 1.0).all(), "Values above 1.0")
+
+    def test_modality_mask_behavior(self):
+        """Verify binary mask vector M in {0, 1}^9 and concatenated output."""
+        # When scroll is disabled
+        t_no_scroll = preprocessing.extract_mock_microtensor(seq_len=4, has_scroll=False)
+        self.assertEqual(t_no_scroll.shape, (4, 18))
+        # Mask is in columns 9..17
+        mask = t_no_scroll[0, 9:]
+        self.assertEqual(mask.shape, (9,))
+        # Core kinematic features active
+        self.assertEqual(mask[0], 1.0)
+        # Contextual scroll features inactive
+        self.assertEqual(mask[7], 0.0)
+        self.assertEqual(mask[8], 0.0)
+        # When masked with 0, feature values must also be 0
+        self.assertEqual(t_no_scroll[0, 7], 0.0)
+        self.assertEqual(t_no_scroll[0, 8], 0.0)
+
+    def test_session_extraction_on_real_adserp(self):
+        """Test extraction directly on real AdSERP session events."""
+        events = preprocessing.parse_adserp_session("p004-b1-t1.csv")
+        t_seq = preprocessing.extract_session_microtensors(events, window_size_ms=500, stride_ms=250)
+        self.assertGreater(len(t_seq), 0)
+        self.assertEqual(t_seq.shape[-1], 18)
+        self.assertFalse(np.isnan(t_seq).any())
+        self.assertFalse(np.isinf(t_seq).any())
+        self.assertTrue((t_seq >= 0.0).all())
+        self.assertTrue((t_seq <= 1.0).all())
+
+
+if __name__ == "__main__":
+    unittest.main()
