@@ -87,27 +87,45 @@ def parse_viewport_metadata(xml_path: str) -> Tuple[Tuple[float, float], Tuple[f
     """
     Parse source window/viewport and document dimensions from trial metadata XML.
     Returns ((viewport_w, viewport_h), (doc_w, doc_h)).
-    Defaults to (1920.0, 1080.0), (1920.0, 2000.0) if missing or malformed.
+    Fails visibly (raises FileNotFoundError or ValueError) if XML is missing or malformed.
     """
-    viewport_w, viewport_h = 1920.0, 1080.0
-    doc_w, doc_h = 1920.0, 2000.0
+    if not os.path.exists(xml_path):
+        raise FileNotFoundError(f"Trial metadata XML file not found: {xml_path}")
 
-    if os.path.exists(xml_path):
-        try:
-            tree = ET.parse(xml_path)
-            root = tree.getroot()
+    try:
+        tree = ET.parse(xml_path)
+        root = tree.getroot()
+    except Exception as e:
+        raise ValueError(f"Failed to parse XML file {xml_path}: {e}")
 
-            win_node = root.find("window")
-            if win_node is not None and win_node.text and "x" in win_node.text:
-                parts = win_node.text.strip().split("x")
-                viewport_w, viewport_h = float(parts[0]), float(parts[1])
+    win_node = root.find("window")
+    if win_node is None or not win_node.text or "x" not in win_node.text:
+        raise ValueError(f"Metadata XML {xml_path} is missing a valid '<window>WxH</window>' element.")
 
-            doc_node = root.find("document")
-            if doc_node is not None and doc_node.text and "x" in doc_node.text:
-                parts = doc_node.text.strip().split("x")
-                doc_w, doc_h = float(parts[0]), float(parts[1])
-        except Exception:
-            pass
+    parts = win_node.text.strip().split("x")
+    if len(parts) != 2:
+        raise ValueError(f"Malformed <window> string '{win_node.text}' in {xml_path}; expected 'WIDTHxHEIGHT'.")
+
+    try:
+        viewport_w, viewport_h = float(parts[0]), float(parts[1])
+    except ValueError as e:
+        raise ValueError(f"Non-numeric <window> dimensions '{win_node.text}' in {xml_path}: {e}")
+
+    if viewport_w <= 0 or viewport_h <= 0:
+        raise ValueError(f"Non-positive <window> dimensions ({viewport_w}, {viewport_h}) in {xml_path}.")
+
+    doc_node = root.find("document")
+    if doc_node is None or not doc_node.text or "x" not in doc_node.text:
+        raise ValueError(f"Metadata XML {xml_path} is missing a valid '<document>WxH</document>' element.")
+
+    doc_parts = doc_node.text.strip().split("x")
+    if len(doc_parts) != 2:
+        raise ValueError(f"Malformed <document> string '{doc_node.text}' in {xml_path}; expected 'WIDTHxHEIGHT'.")
+
+    try:
+        doc_w, doc_h = float(doc_parts[0]), float(doc_parts[1])
+    except ValueError as e:
+        raise ValueError(f"Non-numeric <document> dimensions '{doc_node.text}' in {xml_path}: {e}")
 
     return (viewport_w, viewport_h), (doc_w, doc_h)
 
@@ -179,11 +197,11 @@ def parse_adserp_session(
     if not os.path.exists(csv_path):
         raise FileNotFoundError(f"AdSERP session file not found: {session_path_or_id} (resolved: {csv_path})")
 
-    # Observed source viewport dimensions
-    if xml_path and os.path.exists(xml_path):
-        (vp_w, vp_h), (doc_w, doc_h) = parse_viewport_metadata(xml_path)
-    else:
-        (vp_w, vp_h), (doc_w, doc_h) = (1920.0, 1080.0), (1920.0, 2000.0)
+    # Observed source viewport dimensions (fail visibly if XML is missing)
+    if not xml_path or not os.path.exists(xml_path):
+        raise FileNotFoundError(f"Missing companion trial metadata XML for session: {session_path_or_id} (expected at: {xml_path})")
+
+    (vp_w, vp_h), (doc_w, doc_h) = parse_viewport_metadata(xml_path)
 
     events: List[Dict[str, Any]] = []
 
@@ -244,8 +262,8 @@ def parse_adserp_session(
 
 def compute_window_microtensor(
     events: List[Dict[str, Any]],
-    viewport: Tuple[float, float] = (1920.0, 1080.0),
-    document: Tuple[float, float] = (1920.0, 2000.0),
+    viewport: Tuple[float, float],
+    document: Tuple[float, float],
     window_duration_ms: float = 500.0,
     has_scroll_support: bool = True
 ) -> np.ndarray:
@@ -254,9 +272,15 @@ def compute_window_microtensor(
     X_t (9 features) concatenated with binary Modality Mask Vector M in {0, 1}^9:
     \widetilde{X}_t = [X_t \odot M, M] in R^18.
     All outputs strictly bounded in [0, 1].
+    Fails visibly if viewport or document dimensions are non-positive.
     """
     vp_w, vp_h = viewport
     doc_w, doc_h = document
+
+    if vp_w <= 0.0 or vp_h <= 0.0:
+        raise ValueError(f"Invalid non-positive viewport dimensions: ({vp_w}, {vp_h})")
+    if doc_w <= 0.0 or doc_h <= 0.0:
+        raise ValueError(f"Invalid non-positive document dimensions: ({doc_w}, {doc_h})")
 
     mean_vel = 0.0
     max_vel = 0.0
@@ -362,10 +386,20 @@ def extract_session_microtensors(
     start_time = events[0]["timestamp_ms"]
     end_time = events[-1]["timestamp_ms"]
 
-    vp_w = events[0].get("viewport_w", 1920.0)
-    vp_h = events[0].get("viewport_h", 1080.0)
-    doc_w = events[0].get("doc_w", 1920.0)
-    doc_h = events[0].get("doc_h", 2000.0)
+    if "viewport_w" not in events[0] or "viewport_h" not in events[0]:
+        raise ValueError("Canonical event is missing required 'viewport_w' or 'viewport_h' metadata.")
+    if "doc_w" not in events[0] or "doc_h" not in events[0]:
+        raise ValueError("Canonical event is missing required 'doc_w' or 'doc_h' metadata.")
+
+    vp_w = float(events[0]["viewport_w"])
+    vp_h = float(events[0]["viewport_h"])
+    doc_w = float(events[0]["doc_w"])
+    doc_h = float(events[0]["doc_h"])
+
+    if vp_w <= 0.0 or vp_h <= 0.0:
+        raise ValueError(f"Invalid non-positive viewport dimensions in event stream: ({vp_w}, {vp_h})")
+    if doc_w <= 0.0 or doc_h <= 0.0:
+        raise ValueError(f"Invalid non-positive document dimensions in event stream: ({doc_w}, {doc_h})")
 
     ts_arr = np.array([ev["timestamp_ms"] for ev in events], dtype=np.int64)
 

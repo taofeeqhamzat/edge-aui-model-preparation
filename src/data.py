@@ -36,25 +36,48 @@ def find_project_root() -> Path:
 
 
 def parse_viewport_metadata(xml_path: str) -> Tuple[Tuple[float, float], Tuple[float, float]]:
-    """Parse screen/window viewport and document dimensions from trial metadata XML."""
-    viewport_w, viewport_h = 1920.0, 1080.0
-    doc_w, doc_h = 1920.0, 2000.0
+    """
+    Parse source window/viewport and document dimensions from trial metadata XML.
+    Returns ((viewport_w, viewport_h), (doc_w, doc_h)).
+    Fails visibly (raises FileNotFoundError or ValueError) if XML is missing or malformed.
+    """
+    if not os.path.exists(xml_path):
+        raise FileNotFoundError(f"Trial metadata XML file not found: {xml_path}")
 
-    if os.path.exists(xml_path):
-        try:
-            tree = ET.parse(xml_path)
-            root = tree.getroot()
-            win_node = root.find("window")
-            if win_node is not None and win_node.text and "x" in win_node.text:
-                parts = win_node.text.strip().split("x")
-                viewport_w, viewport_h = float(parts[0]), float(parts[1])
+    try:
+        tree = ET.parse(xml_path)
+        root = tree.getroot()
+    except Exception as e:
+        raise ValueError(f"Failed to parse XML file {xml_path}: {e}")
 
-            doc_node = root.find("document")
-            if doc_node is not None and doc_node.text and "x" in doc_node.text:
-                parts = doc_node.text.strip().split("x")
-                doc_w, doc_h = float(parts[0]), float(parts[1])
-        except Exception:
-            pass
+    win_node = root.find("window")
+    if win_node is None or not win_node.text or "x" not in win_node.text:
+        raise ValueError(f"Metadata XML {xml_path} is missing a valid '<window>WxH</window>' element.")
+
+    parts = win_node.text.strip().split("x")
+    if len(parts) != 2:
+        raise ValueError(f"Malformed <window> string '{win_node.text}' in {xml_path}; expected 'WIDTHxHEIGHT'.")
+
+    try:
+        viewport_w, viewport_h = float(parts[0]), float(parts[1])
+    except ValueError as e:
+        raise ValueError(f"Non-numeric <window> dimensions '{win_node.text}' in {xml_path}: {e}")
+
+    if viewport_w <= 0 or viewport_h <= 0:
+        raise ValueError(f"Non-positive <window> dimensions ({viewport_w}, {viewport_h}) in {xml_path}.")
+
+    doc_node = root.find("document")
+    if doc_node is None or not doc_node.text or "x" not in doc_node.text:
+        raise ValueError(f"Metadata XML {xml_path} is missing a valid '<document>WxH</document>' element.")
+
+    doc_parts = doc_node.text.strip().split("x")
+    if len(doc_parts) != 2:
+        raise ValueError(f"Malformed <document> string '{doc_node.text}' in {xml_path}; expected 'WIDTHxHEIGHT'.")
+
+    try:
+        doc_w, doc_h = float(doc_parts[0]), float(doc_parts[1])
+    except ValueError as e:
+        raise ValueError(f"Non-numeric <document> dimensions '{doc_node.text}' in {xml_path}: {e}")
 
     return (viewport_w, viewport_h), (doc_w, doc_h)
 

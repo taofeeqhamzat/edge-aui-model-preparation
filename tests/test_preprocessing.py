@@ -18,13 +18,41 @@ import preprocessing
 class TestPreprocessingLayerAB(unittest.TestCase):
     """Task 2.1: Canonical Event Schema & Viewport Normalization."""
 
-    def test_parse_viewport_metadata_fallback(self):
-        """Non-existent XML should fallback to default (1920x1080)."""
-        (vp_w, vp_h), (doc_w, doc_h) = preprocessing.parse_viewport_metadata("non_existent_file.xml")
-        self.assertEqual(vp_w, 1920.0)
-        self.assertEqual(vp_h, 1080.0)
-        self.assertEqual(doc_w, 1920.0)
-        self.assertEqual(doc_h, 2000.0)
+    def test_parse_viewport_metadata_valid(self):
+        """Parse valid AdSERP XML and verify exact dimensions."""
+        _, xml_path = preprocessing.resolve_session_files("p004-b1-t1.csv")
+        self.assertIsNotNone(xml_path)
+        (vp_w, vp_h), (doc_w, doc_h) = preprocessing.parse_viewport_metadata(xml_path)
+        self.assertEqual(vp_w, 1422.0)
+        self.assertEqual(vp_h, 1137.0)
+        self.assertEqual(doc_w, 1403.0)
+        self.assertEqual(doc_h, 2642.0)
+
+    def test_parse_viewport_metadata_missing_file_raises(self):
+        """Non-existent XML should raise FileNotFoundError visibly (no synthetic fallback)."""
+        with self.assertRaises(FileNotFoundError):
+            preprocessing.parse_viewport_metadata("non_existent_file.xml")
+
+    def test_parse_viewport_metadata_malformed_raises(self):
+        """Malformed XML missing <window> should raise ValueError visibly."""
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".xml", mode="w", delete=False) as f:
+            f.write("<data><screen>1024x768</screen></data>")
+            tmp_path = f.name
+        try:
+            with self.assertRaises(ValueError):
+                preprocessing.parse_viewport_metadata(tmp_path)
+        finally:
+            os.remove(tmp_path)
+
+    def test_compute_window_microtensor_invalid_viewport_raises(self):
+        """Non-positive viewport dimensions must raise ValueError visibly."""
+        with self.assertRaises(ValueError):
+            preprocessing.compute_window_microtensor(
+                events=[],
+                viewport=(-1.0, 1080.0),
+                document=(1920.0, 2000.0)
+            )
 
     def test_parse_adserp_session_bounds_and_types(self):
         """Parse AdSERP session and verify [0, 1] bounds and semantic event types."""
