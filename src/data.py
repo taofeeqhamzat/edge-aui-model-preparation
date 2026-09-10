@@ -131,13 +131,64 @@ def resolve_adserp_dir(custom_raw_dir: Optional[str] = None) -> Optional[Path]:
     return None
 
 
+def unpack_parquet_sessions(
+    parquet_path: Any,
+    target_raw_adserp: Any,
+    max_sessions: Optional[int] = None
+) -> int:
+    """
+    Unpack consolidated Parquet sessions into individual CSV and XML trial metadata files.
+    Restores the standard mouse-movement-data/ and trial-metadata/ hierarchy in milliseconds.
+    """
+    try:
+        import pandas as pd
+    except ImportError:
+        return 0
+
+    dest = Path(target_raw_adserp)
+    mouse_dir = dest / "mouse-movement-data"
+    meta_dir = dest / "trial-metadata"
+    mouse_dir.mkdir(parents=True, exist_ok=True)
+    meta_dir.mkdir(parents=True, exist_ok=True)
+
+    df = pd.read_parquet(str(parquet_path))
+    session_groups = list(df.groupby("session_id"))
+    if max_sessions:
+        session_groups = session_groups[:max_sessions]
+
+    count = 0
+    for session_id, grp in session_groups:
+        csv_p = mouse_dir / f"{session_id}.csv"
+        xml_p = meta_dir / f"{session_id}.xml"
+
+        cols = ["timestamp", "xpos", "ypos", "event", "xpath"]
+        grp[cols].to_csv(csv_p, index=False)
+
+        r0 = grp.iloc[0]
+        xml_content = (
+            f"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+            f"<data>\n"
+            f" <screen>{int(r0['viewport_w'])}x{int(r0['viewport_h'])}</screen>\n"
+            f" <window>{int(r0['viewport_w'])}x{int(r0['viewport_h'])}</window>\n"
+            f" <document>{int(r0['doc_w'])}x{int(r0['doc_h'])}</document>\n"
+            f"</data>\n"
+        )
+        with open(xml_p, "w", encoding="utf-8") as f:
+            f.write(xml_content)
+        count += 1
+
+    print(f"[Data] Unpacked {count} sessions from Parquet into {dest}")
+    return count
+
+
 def ensure_adserp_dataset(
     raw_dir: Optional[str] = None,
     link_to_raw: bool = True
 ) -> str:
     """
     Ensure the AdSERP dataset is accessible locally.
-    Resolves local storage first, then checks DVC remote, and links into .data/raw to prevent inode duplication.
+    Resolves local storage first, then checks local interim Parquet, DVC remote,
+    and hosted Hugging Face Hub storage. Fails visibly if data cannot be retrieved.
     """
     root = find_project_root()
     target_raw = Path(raw_dir).resolve() if raw_dir else (root / ".data" / "raw")
@@ -152,7 +203,6 @@ def ensure_adserp_dataset(
     # 2. Check candidate local paths (e.g. data-sources/adserp-2025)
     found = resolve_adserp_dir(raw_dir)
     if found:
-        # Symlink into target raw directory if requested (conserves inodes & disk space)
         if link_to_raw and not target_adserp.exists():
             try:
                 target_adserp.symlink_to(found, target_is_directory=True)
@@ -162,31 +212,73 @@ def ensure_adserp_dataset(
                 return str(found)
         return str(found)
 
-    # 3. Try DVC pull
+    # 3. Check if cached consolidated Parquet exists locally in .data/interim/
+    interim_dir = root / ".data" / "interim"
+    parquet_local = interim_dir / "adserp_consolidated.parquet"
+    if parquet_local.is_file():
+        print(f"[Data] Unpacking sessions from local consolidated archive: {parquet_local}")
+        unpacked = unpack_parquet_sessions(parquet_local, target_adserp)
+        if unpacked > 0:
+            return str(target_adserp)
+
+    # 4. Try DVC pull
     print("[Data] AdSERP not found locally; querying DVC remote...")
     if pull_dvc_dataset("adserp-2025"):
         found = resolve_adserp_dir(raw_dir)
         if found:
             return str(found)
 
-    # 4. Hosted Hugging Face Hub fallback
-    print("[Data] Querying Hugging Face Hub for hosted interaction datasets...")
+    # 5. Remote Hugging Face Hub download (fast consolidated Parquet retrieval)
+    print("[Data] Downloading consolidated AdSERP archive from Hugging Face Hub (T40/edge-aui-framework-data)...")
     try:
-        from huggingface_hub import snapshot_download
-        downloaded = snapshot_download(
+        from huggingface_hub import hf_hub_download
+        interim_dir.mkdir(parents=True, exist_ok=True)
+        downloaded_parquet = hf_hub_download(
             repo_id="T40/edge-aui-framework-data",
             repo_type="dataset",
-            local_dir=str(target_raw),
-            allow_patterns=["*adserp*", "adserp-2025/*"],
-            max_workers=2
+            filename="interim/adserp_consolidated.parquet",
+            local_dir=str(root / ".data")
         )
-        if resolve_adserp_dir(downloaded):
-            return str(resolve_adserp_dir(downloaded))
+        print(f"[Data] Successfully retrieved remote consolidated archive: {downloaded_parquet}")
+        unpacked = unpack_parquet_sessions(downloaded_parquet, target_adserp)
+        if unpacked > 0:
+            return str(target_adserp)
     except Exception as e:
-        print(f"[Data] Note on hosted sync: {e}")
+        print(f"[Data] Note on remote archive sync: {e}")
 
-    # Fallback to target_adserp path
-    return str(target_adserp)
+    # 6. Fallback: On-demand download of sample sessions from HF Hub
+    try:
+        from huggingface_hub import hf_hub_download
+        mouse_dir = target_adserp / "mouse-movement-data"
+        meta_dir = target_adserp / "trial-metadata"
+        mouse_dir.mkdir(parents=True, exist_ok=True)
+        meta_dir.mkdir(parents=True, exist_ok=True)
+
+        for s_id in ["p004-b1-t1", "p004-b1-t2", "p004-b1-t3", "p004-b1-t4", "p004-b1-t5"]:
+            csv_path = hf_hub_download(
+                repo_id="T40/edge-aui-framework-data",
+                repo_type="dataset",
+                filename=f"raw/adserp-2025/mouse-movement-data/{s_id}.csv"
+            )
+            xml_path = hf_hub_download(
+                repo_id="T40/edge-aui-framework-data",
+                repo_type="dataset",
+                filename=f"raw/adserp-2025/trial-metadata/{s_id}.xml"
+            )
+            shutil.copy2(csv_path, mouse_dir / f"{s_id}.csv")
+            shutil.copy2(xml_path, meta_dir / f"{s_id}.xml")
+
+        if any(mouse_dir.glob("*.csv")):
+            return str(target_adserp)
+    except Exception as e:
+        print(f"[Data] Note on direct session retrieval: {e}")
+
+    # 7. Fail visibly (no manufactured synthetic fallback)
+    raise FileNotFoundError(
+        f"AdSERP dataset could not be located or retrieved. "
+        f"Checked local directories ({target_adserp}, data-sources/adserp-2025) and remote Hugging Face Hub storage. "
+        f"Please verify data sources or network connectivity."
+    )
 
 
 def consolidate_adserp_sessions(

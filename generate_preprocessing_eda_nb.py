@@ -123,7 +123,9 @@ def build_preprocessing_eda_notebook(branch: str = "explore/pipeline/revision/1"
                     "\n",
                     "# Ensure dataset availability\n",
                     "adserp_dir = data.ensure_adserp_dataset()\n",
-                    "print(f'[Data] AdSERP dataset root: {adserp_dir}')"
+                    "print(f'[Data] AdSERP dataset root: {adserp_dir}')\n",
+                    "assert os.path.isdir(adserp_dir), f'AdSERP directory does not exist: {adserp_dir}'\n",
+                    "assert (Path(adserp_dir) / 'mouse-movement-data').is_dir(), f'mouse-movement-data not found in {adserp_dir}'"
                 ]
             },
             {
@@ -147,7 +149,7 @@ def build_preprocessing_eda_notebook(branch: str = "explore/pipeline/revision/1"
                     "\n",
                     "# Parse canonical events from a sample session\n",
                     "sample_session = 'p004-b1-t1.csv'\n",
-                    "events = preprocessing.parse_adserp_session(sample_session)\n",
+                    "events = preprocessing.parse_adserp_session(sample_session, raw_dir=adserp_dir)\n",
                     "df_events = pd.DataFrame(events)\n",
                     "\n",
                     "print(f'Total parsed events for {sample_session}: {len(df_events)}')\n",
@@ -206,7 +208,7 @@ def build_preprocessing_eda_notebook(branch: str = "explore/pipeline/revision/1"
                     "session_lengths = []\n",
                     "\n",
                     "for csv_file in session_csvs:\n",
-                    "    evs = preprocessing.parse_adserp_session(str(csv_file))\n",
+                    "    evs = preprocessing.parse_adserp_session(str(csv_file), raw_dir=adserp_dir)\n",
                     "    t_seq = preprocessing.extract_session_microtensors(evs, window_size_ms=500, stride_ms=250)\n",
                     "    if len(t_seq) > 0:\n",
                     "        all_tensors.append(t_seq)\n",

@@ -155,19 +155,23 @@ def resolve_session_files(session_path_or_id: str, raw_dir: Optional[str] = None
     adserp_root = resolve_adserp_dir(raw_dir)
     search_dirs: List[Path] = []
     if raw_dir:
-        search_dirs.append(Path(raw_dir).resolve())
+        r = Path(raw_dir).resolve()
+        search_dirs.extend([r, r / "adserp-2025", r / "adserp"])
     if adserp_root:
         search_dirs.append(adserp_root)
 
     proj_root = find_project_root()
     search_dirs.extend([
         proj_root / ".data" / "raw" / "adserp-2025",
-        proj_root.parent / "data-sources" / "adserp-2025",
         proj_root / ".data" / "raw" / "adserp",
+        proj_root / ".data" / "raw" / "raw" / "adserp-2025",
+        proj_root.parent / "data-sources" / "adserp-2025",
+        proj_root.parent / "data-sources" / "adserp",
         Path("/Users/user/Workspace/MivaCS/FYP/data-sources/adserp-2025")
     ])
 
     for base in search_dirs:
+        # Check standard layout: base/mouse-movement-data/
         mouse_dir = base / "mouse-movement-data"
         meta_dir = base / "trial-metadata"
         candidate_csv = mouse_dir / csv_filename
@@ -175,6 +179,32 @@ def resolve_session_files(session_path_or_id: str, raw_dir: Optional[str] = None
             candidate_xml = meta_dir / f"{session_id}.xml"
             xml_path = str(candidate_xml.resolve()) if candidate_xml.is_file() else None
             return str(candidate_csv.resolve()), xml_path
+
+        # Check direct placement in base/
+        direct_csv = base / csv_filename
+        if direct_csv.is_file():
+            direct_xml = base / f"{session_id}.xml"
+            xml_path = str(direct_xml.resolve()) if direct_xml.is_file() else None
+            return str(direct_csv.resolve()), xml_path
+
+    # 3. On-demand retrieval from hosted Hugging Face Hub if available
+    try:
+        from huggingface_hub import hf_hub_download
+        csv_remote = f"raw/adserp-2025/mouse-movement-data/{csv_filename}"
+        xml_remote = f"raw/adserp-2025/trial-metadata/{session_id}.xml"
+        csv_downloaded = hf_hub_download(
+            repo_id="T40/edge-aui-framework-data",
+            repo_type="dataset",
+            filename=csv_remote
+        )
+        xml_downloaded = hf_hub_download(
+            repo_id="T40/edge-aui-framework-data",
+            repo_type="dataset",
+            filename=xml_remote
+        )
+        return csv_downloaded, xml_downloaded
+    except Exception:
+        pass
 
     return session_path_or_id, None
 
