@@ -66,7 +66,22 @@ FEATURE_NAMES = [
 CORE_FEATURE_NAMES = FEATURE_NAMES[:7]
 CONTEXTUAL_FEATURE_NAMES = FEATURE_NAMES[7:]
 NUM_FEATURES = len(FEATURE_NAMES)  # 9
-INPUT_DIM = NUM_FEATURES * 2       # 18 with binary modality mask
+MICROTENSOR_DIM = NUM_FEATURES * 2  # 18 with binary modality mask
+INPUT_DIM = MICROTENSOR_DIM
+
+FEATURE_COLUMN_NAMES = [
+    "mean_velocity",
+    "max_velocity",
+    "mean_acceleration",
+    "hesitation_count",
+    "total_trajectory_length",
+    "dwell_time_ms",
+    "trajectory_entropy",
+    "scroll_depth_percentage",
+    "scroll_velocity"
+]
+MASK_COLUMN_NAMES = [f"mask_{c}" for c in FEATURE_COLUMN_NAMES]
+ALL_MICROTENSOR_COLUMNS = FEATURE_COLUMN_NAMES + MASK_COLUMN_NAMES
 
 LABEL_MAP = {
     "IDLE_ABANDON": 0,
@@ -295,7 +310,8 @@ def compute_window_microtensor(
     viewport: Tuple[float, float],
     document: Tuple[float, float],
     window_duration_ms: float = 500.0,
-    has_scroll_support: bool = True
+    has_scroll_support: bool = True,
+    scales: Optional[Dict[str, float]] = None
 ) -> np.ndarray:
     r"""
     Extract a single 18-dimensional MicroTensor from a 500ms interaction window:
@@ -311,6 +327,17 @@ def compute_window_microtensor(
         raise ValueError(f"Invalid non-positive viewport dimensions: ({vp_w}, {vp_h})")
     if doc_w <= 0.0 or doc_h <= 0.0:
         raise ValueError(f"Invalid non-positive document dimensions: ({doc_w}, {doc_h})")
+
+    scale_dict = {
+        "velocity": 10.0,
+        "max_velocity": 10.0,
+        "acceleration": 0.1,
+        "hesitation": 10.0,
+        "trajectory": 2000.0,
+        "scroll_velocity": 5.0
+    }
+    if scales:
+        scale_dict.update(scales)
 
     mean_vel = 0.0
     max_vel = 0.0
@@ -336,8 +363,16 @@ def compute_window_microtensor(
         x_norm = np.array([ev["x_norm"] for ev in pointer_events], dtype=np.float64)
         y_norm = np.array([ev["y_norm"] for ev in pointer_events], dtype=np.float64)
 
-        dx_px = np.diff(x_norm) * vp_w
-        dy_px = np.diff(y_norm) * vp_h
+        if "x" in pointer_events[0] and pointer_events[0]["x"] is not None and "y" in pointer_events[0] and pointer_events[0]["y"] is not None:
+            dx_px = np.diff(np.array([ev["x"] for ev in pointer_events], dtype=np.float64))
+            dy_px = np.diff(np.array([ev["y"] for ev in pointer_events], dtype=np.float64))
+        elif "x_raw" in pointer_events[0] and pointer_events[0]["x_raw"] is not None and "y_raw" in pointer_events[0] and pointer_events[0]["y_raw"] is not None:
+            dx_px = np.diff(np.array([ev["x_raw"] for ev in pointer_events], dtype=np.float64))
+            dy_px = np.diff(np.array([ev["y_raw"] for ev in pointer_events], dtype=np.float64))
+        else:
+            dx_px = np.diff(x_norm) * vp_w
+            dy_px = np.diff(y_norm) * vp_h
+
         dt_ms = np.diff(t_arr)
         dt_ms = np.where(dt_ms <= 0, 1.0, dt_ms)
 
@@ -367,9 +402,17 @@ def compute_window_microtensor(
                 p = hist[hist > 0] / hist_sum
                 trajectory_entropy = float(-np.sum(p * np.log2(p)) / 3.0)
 
+    def _is_valid_dom_target(t: Any) -> bool:
+        if t is None or isinstance(t, (float, int)):
+            return False
+        t_str = str(t).strip()
+        return bool(t_str and t_str not in ("/", "/html", "nan", "None", "{}"))
+
     dwell_evs = [
         ev for ev in events
-        if ev.get("event_type") == "mouseover" or (ev.get("xpath") and ev.get("xpath") not in ("/", "/html", ""))
+        if ev.get("event_type") == "mouseover"
+        or _is_valid_dom_target(ev.get("target_id"))
+        or _is_valid_dom_target(ev.get("xpath"))
     ]
     dwell_time_ms = min(float(len(dwell_evs) * 40.0), float(window_duration_ms))
 
@@ -382,15 +425,15 @@ def compute_window_microtensor(
         scroll_depth_pct = min(1.0, (scroll_count * 80.0) / max_scrollable)
 
     raw_features = np.array([
-        np.clip(mean_vel / 10.0, 0.0, 1.0),
-        np.clip(max_vel / 10.0, 0.0, 1.0),
-        np.clip(mean_accel / 0.1, 0.0, 1.0),
-        np.clip(hesitation_cnt / 10.0, 0.0, 1.0),
-        np.clip(total_traj_len / 2000.0, 0.0, 1.0),
+        np.clip(mean_vel / scale_dict["velocity"], 0.0, 1.0),
+        np.clip(max_vel / scale_dict["max_velocity"], 0.0, 1.0),
+        np.clip(mean_accel / scale_dict["acceleration"], 0.0, 1.0),
+        np.clip(hesitation_cnt / scale_dict["hesitation"], 0.0, 1.0),
+        np.clip(total_traj_len / scale_dict["trajectory"], 0.0, 1.0),
         np.clip(dwell_time_ms / window_duration_ms, 0.0, 1.0),
         np.clip(trajectory_entropy, 0.0, 1.0),
         np.clip(scroll_depth_pct, 0.0, 1.0),
-        np.clip(scroll_vel / 5.0, 0.0, 1.0)
+        np.clip(scroll_vel / scale_dict["scroll_velocity"], 0.0, 1.0)
     ], dtype=np.float32)
 
     masked_features = raw_features * mask
