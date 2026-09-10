@@ -13,10 +13,10 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 try:
-    from preprocessing import MicroInteractionSequenceDataset, FEATURE_NAMES
+    from preprocessing import MicroInteractionSequenceDataset, FEATURE_NAMES, MICROTENSOR_DIM
 except ImportError:
     # pyrefly: ignore [missing-import]
-    from src.preprocessing import MicroInteractionSequenceDataset, FEATURE_NAMES
+    from src.preprocessing import MicroInteractionSequenceDataset, FEATURE_NAMES, MICROTENSOR_DIM
 
 try:
     from data_manager import find_project_root, is_colab, is_kaggle
@@ -69,6 +69,44 @@ class EdgeAUIGRU(nn.Module):
         return self.fc(out)
 
 
+def load_foundation_dataset(
+    data_dir: Optional[str] = None,
+    max_sequences: Optional[int] = None,
+    split: str = "train",
+    train_ratio: float = 0.70,
+    val_ratio: float = 0.15,
+    random_seed: int = 42
+) -> MicroInteractionSequenceDataset:
+    """
+    Load model-ready (N, 8, 18) sequence tensors from flattened Parquet storage,
+    enforcing leak-free user splitting and deterministic temporal ordering.
+    """
+    from pathlib import Path
+    root = Path(find_project_root())
+    interim_micro = root / ".data" / "interim" / "microtensors" / "adserp_microtensors.parquet"
+
+    # Auto-extract if interim microtensors do not yet exist
+    if not interim_micro.is_file():
+        canon_path = root / ".data" / "canonical" / "adserp" / "data.parquet"
+        if not canon_path.is_file():
+            from src.data import convert_adserp_to_canonical
+            convert_adserp_to_canonical()
+        from src.microtensor_store import extract_microtensors_from_canonical
+        extract_microtensors_from_canonical(str(canon_path), str(interim_micro))
+
+    from src.microtensor_store import split_users_leak_free, reconstruct_sequences_from_parquet
+    train_u, val_u, test_u = split_users_leak_free(str(interim_micro), train_ratio=train_ratio, val_ratio=val_ratio, random_seed=random_seed)
+
+    target_users = train_u if split == "train" else (val_u if split == "val" else test_u)
+    X, Y = reconstruct_sequences_from_parquet(str(interim_micro), seq_len=8, filter_users=target_users)
+
+    if max_sequences and len(X) > max_sequences:
+        X = X[:max_sequences]
+        Y = Y[:max_sequences]
+
+    return MicroInteractionSequenceDataset(X, Y)
+
+
 def train_foundation_model(
     data_dir: Optional[str] = None,
     hf_repo_id: str = "T40/edge-aui-framework-data",
@@ -93,14 +131,12 @@ def train_foundation_model(
 
     if verbose:
         print(f"[Training] Target execution device: {target_device}")
-        print(f"[Training] Loading interaction sequences (data_root='{target_data_dir}', repo='{hf_repo_id}')...")
+        print(f"[Training] Loading interaction sequences from Parquet storage...")
 
-    dataset = MicroInteractionSequenceDataset(
-        data_root=target_data_dir,
-        hf_repo_id=hf_repo_id,
-        hf_token=hf_token,
+    dataset = load_foundation_dataset(
+        data_dir=target_data_dir,
         max_sequences=max_sequences,
-        max_files_per_dataset=max_files_per_dataset
+        split="train"
     )
     
     if len(dataset) == 0:
@@ -110,7 +146,7 @@ def train_foundation_model(
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     
     model = EdgeAUIGRU(
-        input_dim=len(FEATURE_NAMES), 
+        input_dim=MICROTENSOR_DIM, 
         hidden_dim=hidden_dim, 
         num_layers=num_layers, 
         num_classes=NUM_CLASSES

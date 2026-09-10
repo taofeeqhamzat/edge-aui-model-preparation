@@ -16,10 +16,10 @@ import onnxruntime as ort
 from onnxruntime.quantization import quantize_dynamic, QuantType
 
 try:
-    from training import EdgeAUIGRU, FEATURE_NAMES, HIDDEN_DIM, NUM_LAYERS, NUM_CLASSES
+    from training import EdgeAUIGRU, FEATURE_NAMES, MICROTENSOR_DIM, HIDDEN_DIM, NUM_LAYERS, NUM_CLASSES
 except ImportError:
     # pyrefly: ignore [missing-import]
-    from src.training import EdgeAUIGRU, FEATURE_NAMES, HIDDEN_DIM, NUM_LAYERS, NUM_CLASSES
+    from src.training import EdgeAUIGRU, FEATURE_NAMES, MICROTENSOR_DIM, HIDDEN_DIM, NUM_LAYERS, NUM_CLASSES
 
 try:
     from data_manager import find_project_root
@@ -64,7 +64,7 @@ def export_and_quantize(
 
     print(f"[Export] Loading PyTorch model from: {resolved_model_path}")
     model = EdgeAUIGRU(
-        input_dim=len(FEATURE_NAMES), 
+        input_dim=MICROTENSOR_DIM, 
         hidden_dim=HIDDEN_DIM, 
         num_layers=NUM_LAYERS, 
         num_classes=NUM_CLASSES
@@ -73,7 +73,7 @@ def export_and_quantize(
     model.eval()
 
     # Dummy input for tracing (batch_size=1, seq_len=8, features)
-    dummy_input = torch.randn(1, 8, len(FEATURE_NAMES))
+    dummy_input = torch.randn(1, 8, MICROTENSOR_DIM)
 
     # Export to ONNX using stable TorchScript backend for dynamic quantization compatibility
     onnx_path = os.path.join(resolved_output_dir, "model.onnx")
