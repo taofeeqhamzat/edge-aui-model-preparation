@@ -1,19 +1,34 @@
 stages:
-  train:
-    cmd: python -c "import sys; sys.path.insert(0, 'src'); import training; training.DATA_DIR='.data/raw'; training.train_foundation_model()"
+  data_sync:
+    cmd: python3 -m src.data --mode minimal
+    deps:
+      - src/data.py
+      - src/config.yaml
+    outs:
+      - .data/interim/adserp_consolidated.parquet:
+          cache: false
+
+  train_foundation:
+    cmd: python3 -m src.training --mode minimal
     deps:
       - src/training.py
       - src/preprocessing.py
-      - src/data_manager.py
-      - .data/raw
+      - src/target_generation.py
+      - src/config.yaml
+      - .data/interim/adserp_consolidated.parquet
     outs:
       - models/foundational_gru.pth
 
+  fine_tune_ablation:
+    cmd: python3 -c "import sys; sys.path.insert(0, 'src'); import training; training.run_ablation_suite()"
+    deps:
+      - src/training.py
+      - models/foundational_gru.pth
+
   export:
-    cmd: python -c "import sys; sys.path.insert(0, 'src'); import export; export.export_and_quantize(model_path='models/foundational_gru.pth', output_dir='models')"
+    cmd: python3 -m src.export --model-path models/foundational_gru.pth --output-dir models
     deps:
       - src/export.py
-      - src/data_manager.py
       - models/foundational_gru.pth
     outs:
       - models/model.onnx

@@ -1,4 +1,5 @@
 instructions.md
+instructions*.md
 secret.txt
 .env*
 .venv/
@@ -7,3 +8,9 @@ __pycache__/
 models/
 *.onnx
 *.onnx.data
+
+# Local data cache
+.data/interim/*
+!.data/interim/.gitkeep
+.data/processed/*
+!.data/processed/.gitkeep

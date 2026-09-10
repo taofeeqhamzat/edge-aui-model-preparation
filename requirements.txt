@@ -13,3 +13,5 @@ onnxscript
 scikit-learn
 jupyter
 tqdm
+pyyaml
+pyarrow

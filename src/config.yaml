@@ -1,0 +1,95 @@
+# Edge-AUI Framework: Model Preparation Pipeline Configuration
+
+mode: minimal # "minimal" (MVP) or "extended"
+
+modes:
+  minimal:
+    description: "MVP: AdSERP -> Target UI Testbed"
+    sequence:
+      - adserp
+      - target_testbed
+  extended:
+    description: "Extended: CaptchaSolve30k -> VideoCUA -> AdSERP -> Target UI Testbed"
+    sequence:
+      - captcha_solve_30k
+      - video_cua
+      - adserp
+      - target_testbed
+
+data:
+  raw_dir: ".data/raw"
+  interim_dir: ".data/interim"
+  processed_dir: ".data/processed"
+  dvc_remote: "hfremote"
+  hf_repo: "T40/edge-aui-framework-data"
+  consolidate_parquet: true
+
+preprocessing:
+  window_size_ms: 500
+  stride_ms: 250
+  reference_viewport: [1920, 1080]
+  core_features:
+    - meanVelocity
+    - maxVelocity
+    - meanAcceleration
+    - hesitationCount
+    - totalTrajectoryLength
+    - dwellTimeMs
+    - trajectoryEntropy
+  contextual_features:
+    - scrollDepthPercentage
+    - scrollVelocity
+  num_features: 9
+  input_dim: 18 # 9 features * 2 (modality masking: [X * M, M])
+  min_events_per_window: 3
+
+target_generation:
+  lookahead_horizon_ms: [500, 1500]
+  outcome_taxonomy:
+    0: IDLE_ABANDON
+    1: CLICK
+    2: FORM_SUBMIT
+    3: BACKTRACK
+    4: RAPID_SCROLL
+    5: HOVER_DWELL
+  target_intervention_vocabulary:
+    0: simplify_options
+    1: highlight_primary_action
+    2: offer_assistance
+    3: expand_tooltip
+    4: no_op
+
+training:
+  batch_size: 64
+  epochs: 5
+  learning_rate: 0.001
+  hidden_dim: 64
+  num_layers: 2
+  foundation_classes: 6
+  target_classes: 5
+  device: "auto" # "auto", "cuda", "mps", "cpu"
+
+ablation:
+  strict_freezing:
+    train_backbone: false
+    head_lr: 0.001
+  partial_finetuning:
+    train_terminal_layer: true
+    gru_lr: 0.0001
+    head_lr: 0.001
+  full_finetuning:
+    train_all_layers: true
+    lr: 0.0005
+  metrics:
+    - hr_1
+    - hr_3
+    - mrr
+
+export:
+  output_dir: "models"
+  onnx_filename: "model.onnx"
+  quantized_filename: "model_int8.onnx"
+  quantization_type: "QUInt8"
+  opset_version: 17
+  max_memory_mb: 20.0
+  target_latency_ms: 50.0
