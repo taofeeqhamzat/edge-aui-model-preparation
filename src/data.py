@@ -110,14 +110,20 @@ def resolve_adserp_dir(custom_raw_dir: Optional[str] = None) -> Optional[Path]:
     candidates: List[Path] = []
 
     if custom_raw_dir:
-        candidates.append(Path(custom_raw_dir).resolve())
-        candidates.append(Path(custom_raw_dir).resolve() / "adserp-2025")
-        candidates.append(Path(custom_raw_dir).resolve() / "adserp")
+        c_p = Path(custom_raw_dir).resolve()
+        candidates.extend([
+            c_p,
+            c_p / "adserp-2025",
+            c_p / "raw" / "adserp-2025",
+            c_p / "adserp",
+        ])
 
     # Priority local paths
     candidates.extend([
         root / ".data" / "raw" / "adserp-2025",
+        root / ".data" / "raw" / "raw" / "adserp-2025",
         root / ".data" / "raw" / "adserp",
+        root / ".data" / "adserp-2025",
         root.parent / "data-sources" / "adserp-2025",
         root.parent / "data-sources" / "adserp",
         Path("/Users/user/Workspace/MivaCS/FYP/data-sources/adserp-2025")
@@ -198,6 +204,23 @@ def ensure_adserp_dataset(
     # 1. Check if already directly present in target raw dir
     if target_adserp.is_dir() and (target_adserp / "mouse-movement-data").is_dir():
         if any((target_adserp / "mouse-movement-data").glob("*.csv")):
+            return str(target_adserp)
+
+    # 1b. Check if already present in nested download directory (e.g. .data/raw/raw/adserp-2025)
+    nested_adserp = target_raw / "raw" / "adserp-2025"
+    if nested_adserp.is_dir() and (nested_adserp / "mouse-movement-data").is_dir():
+        if any((nested_adserp / "mouse-movement-data").glob("*.csv")):
+            if not target_adserp.exists():
+                try:
+                    target_adserp.symlink_to(nested_adserp, target_is_directory=True)
+                    print(f"[Data] Linked nested download: {target_adserp} -> {nested_adserp}")
+                except Exception:
+                    # If symlinking fails on host, move it directly into place
+                    try:
+                        shutil.move(str(nested_adserp), str(target_adserp))
+                        print(f"[Data] Moved nested download to canonical location: {target_adserp}")
+                    except Exception:
+                        return str(nested_adserp)
             return str(target_adserp)
 
     # 2. Check candidate local paths (e.g. data-sources/adserp-2025)
