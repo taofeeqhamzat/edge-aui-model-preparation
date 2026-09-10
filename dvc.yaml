@@ -1,21 +1,33 @@
 stages:
-  data_sync:
-    cmd: python3 -m src.data --mode minimal
+  canonicalize:
+    cmd: python3 -m src.data --canonicalize adserp
     deps:
       - src/data.py
       - src/config.yaml
     outs:
-      - .data/interim/adserp_consolidated.parquet:
+      - .data/canonical/adserp/data.parquet:
+          cache: false
+
+  extract_microtensors:
+    cmd: python3 -m src.microtensor_store --canonical-path .data/canonical/adserp/data.parquet --output-path .data/interim/microtensors/adserp_microtensors.parquet
+    deps:
+      - src/microtensor_store.py
+      - src/preprocessing.py
+      - src/target_generation.py
+      - .data/canonical/adserp/data.parquet
+    outs:
+      - .data/interim/microtensors/adserp_microtensors.parquet:
           cache: false
 
   train_foundation:
-    cmd: python3 -m src.training --mode minimal
+    cmd: python3 -m src.training --epochs 5
     deps:
       - src/training.py
       - src/preprocessing.py
       - src/target_generation.py
+      - src/microtensor_store.py
       - src/config.yaml
-      - .data/interim/adserp_consolidated.parquet
+      - .data/interim/microtensors/adserp_microtensors.parquet
     outs:
       - models/foundational_gru.pth
 

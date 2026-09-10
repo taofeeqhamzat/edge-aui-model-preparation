@@ -291,7 +291,7 @@ def build_preprocessing_eda_notebook(branch: str = "explore/pipeline/revision/1"
                     "mask_activation_rates = df_masks.mean()\n",
                     "\n",
                     "plt.figure(figsize=(12, 5))\n",
-                    "bar_plot = sns.barplot(x=mask_activation_rates.index, y=mask_activation_rates.values, palette='Blues_d')\n",
+                    "bar_plot = sns.barplot(x=mask_activation_rates.index, y=mask_activation_rates.values, hue=mask_activation_rates.index, palette='Blues_d', legend=False)\n",
                     "plt.title('Modality Mask Activation Frequency ($M \\in \\{0, 1\\}^9$)', fontsize=13, fontweight='bold')\n",
                     "plt.ylabel('Activation Frequency (Fraction of Windows)')\n",
                     "plt.xlabel('Modality Mask Dimensions')\n",

@@ -1,0 +1,109 @@
+schema: '2.0'
+stages:
+  canonicalize:
+    cmd: python3 -m src.data --canonicalize adserp
+    deps:
+    - path: src/config.yaml
+      hash: md5
+      md5: 3882120283a897ca8dcf4a0773bd0381
+      size: 2281
+    - path: src/data.py
+      hash: md5
+      md5: af9a158286f90c67e4620210ba5de60f
+      size: 38020
+    outs:
+    - path: .data/canonical/adserp/data.parquet
+      hash: md5
+      md5: 9289931fd9fc1c690cb1785cd5d33ea1
+      size: 13500782
+  extract_microtensors:
+    cmd: python3 -m src.microtensor_store --canonical-path 
+      .data/canonical/adserp/data.parquet --output-path 
+      .data/interim/microtensors/adserp_microtensors.parquet
+    deps:
+    - path: .data/canonical/adserp/data.parquet
+      hash: md5
+      md5: 9289931fd9fc1c690cb1785cd5d33ea1
+      size: 13500782
+    - path: src/microtensor_store.py
+      hash: md5
+      md5: 3e97d7c9e0fffbc5e2e94d40a926c28a
+      size: 13319
+    - path: src/preprocessing.py
+      hash: md5
+      md5: cf4fb1053ea3e40108c608f3554d49b1
+      size: 23152
+    - path: src/target_generation.py
+      hash: md5
+      md5: bb3a6a791e1de35f99e8cff0e9c1f5e4
+      size: 3137
+    outs:
+    - path: .data/interim/microtensors/adserp_microtensors.parquet
+      hash: md5
+      md5: 284000eb821972310c2da905fc4640f5
+      size: 3788666
+  train_foundation:
+    cmd: python3 -m src.training --epochs 5
+    deps:
+    - path: .data/interim/microtensors/adserp_microtensors.parquet
+      hash: md5
+      md5: 284000eb821972310c2da905fc4640f5
+      size: 3788666
+    - path: src/config.yaml
+      hash: md5
+      md5: 3882120283a897ca8dcf4a0773bd0381
+      size: 2281
+    - path: src/microtensor_store.py
+      hash: md5
+      md5: 3e97d7c9e0fffbc5e2e94d40a926c28a
+      size: 13319
+    - path: src/preprocessing.py
+      hash: md5
+      md5: cf4fb1053ea3e40108c608f3554d49b1
+      size: 23152
+    - path: src/target_generation.py
+      hash: md5
+      md5: bb3a6a791e1de35f99e8cff0e9c1f5e4
+      size: 3137
+    - path: src/training.py
+      hash: md5
+      md5: cac8448c2a823a8bf6748d59a8ac1562
+      size: 8744
+    outs:
+    - path: models/foundational_gru.pth
+      hash: md5
+      md5: 22b2e17eb74a5f5aeec1c7edda7e6fac
+      size: 50261
+  fine_tune_ablation:
+    cmd: python3 -c "import sys; sys.path.insert(0, 'src'); import training; 
+      training.run_ablation_suite()"
+    deps:
+    - path: models/foundational_gru.pth
+      hash: md5
+      md5: 22b2e17eb74a5f5aeec1c7edda7e6fac
+      size: 50261
+    - path: src/training.py
+      hash: md5
+      md5: cac8448c2a823a8bf6748d59a8ac1562
+      size: 8744
+  export:
+    cmd: python3 -m src.export --model-path models/foundational_gru.pth 
+      --output-dir models
+    deps:
+    - path: models/foundational_gru.pth
+      hash: md5
+      md5: 22b2e17eb74a5f5aeec1c7edda7e6fac
+      size: 50261
+    - path: src/export.py
+      hash: md5
+      md5: 6411d1dd46160ab7666f69ce040fb5c1
+      size: 5787
+    outs:
+    - path: models/model.onnx
+      hash: md5
+      md5: 5de9faefabe1340509e4e99e3ebed7ce
+      size: 49278
+    - path: models/model_int8.onnx
+      hash: md5
+      md5: 9c10977d5fcac18b9b0f472534fec44d
+      size: 50892

@@ -3,7 +3,7 @@ import os
 import subprocess
 
 
-def get_current_branch(default: str = "main") -> str:
+def get_current_branch(default: str = "explore/pipeline/revision/1") -> str:
     env_branch = os.environ.get("GITHUB_REF_NAME") or os.environ.get("GIT_BRANCH")
     if env_branch:
         return env_branch
@@ -22,7 +22,7 @@ def get_current_branch(default: str = "main") -> str:
     return default
 
 
-def create_training_notebook(branch: str = "main") -> dict:
+def create_training_notebook(branch: str = "explore/pipeline/revision/1") -> dict:
     return {
         "cells": [
             {
@@ -35,7 +35,7 @@ def create_training_notebook(branch: str = "main") -> dict:
                     "\n",
                     "This notebook executes the end-to-end pipeline for the **Edge-AUI Framework** in hosted environments (Google Colab / Kaggle):\n",
                     "1. Synchronizes interaction datasets directly from the Hugging Face Hub (`T40/edge-aui-framework-data`).\n",
-                    "2. Extracts 8-dimensional MicroTensors from continuous behavioral trajectories.\n",
+                    "2. Extracts 18-dimensional MicroTensors (9 kinematic features + 9 modality masks) from continuous behavioral trajectories.\n",
                     "3. Trains a lightweight PyTorch Gated Recurrent Unit (GRU) model with hardware acceleration (CUDA / MPS / CPU).\n",
                     "4. Exports the PyTorch model to dynamic ONNX and applies INT8 Post-Training Quantization (PTQ).\n",
                     "5. Empirically validates edge constraints: **Memory Footprint < 20MB** and **Inference Latency < 50ms**."
@@ -149,18 +149,21 @@ def create_training_notebook(branch: str = "main") -> dict:
             "source": [
                 "import importlib\n",
                 "import preprocessing\n",
+                "import training\n",
                 "importlib.reload(preprocessing)\n",
-                "from preprocessing import MicroInteractionSequenceDataset, FEATURE_NAMES, LABEL_MAP\n",
+                "importlib.reload(training)\n",
+                "from training import load_foundation_dataset\n",
+                "from preprocessing import FEATURE_NAMES, LABEL_MAP, MICROTENSOR_DIM\n",
                 "\n",
-                "# Initialize sequence dataset\n",
-                "dataset = MicroInteractionSequenceDataset(data_root=DATA_ROOT, max_files_per_dataset=10)\n",
+                "# Load sequence dataset\n",
+                "dataset = load_foundation_dataset(data_dir=DATA_ROOT, max_sequences=1000, split='train')\n",
                 "print(f\"[Dataset] Total behavioral sequences extracted: {len(dataset)}\")\n",
                 "\n",
                 "if len(dataset) > 0:\n",
                 "    sample_x, sample_y = dataset[0]\n",
                 "    print(f\"[Dataset] Input Tensor Shape (seq_len, features): {sample_x.shape}\")\n",
                 "    print(f\"[Dataset] Target Outcome Label: {sample_y.item()}\")\n",
-                "    print(\"[Dataset] MicroTensor Features:\", FEATURE_NAMES)\n",
+                "    print(f\"[Dataset] MicroTensor Dimension: {MICROTENSOR_DIM} ({len(FEATURE_NAMES)} features + {len(FEATURE_NAMES)} masks)\")\n",
                 "    print(\"[Dataset] Outcome Classes:\", LABEL_MAP)"
             ]
         },
