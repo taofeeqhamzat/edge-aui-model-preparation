@@ -14,3 +14,8 @@ models/
 !.data/interim/.gitkeep
 .data/processed/*
 !.data/processed/.gitkeep
+
+# Plan task files & documentation (only persist directory structure via .gitkeep)
+docs/plan/**/*.md
+docs/plan/*.md
+!docs/plan/**/.gitkeep
