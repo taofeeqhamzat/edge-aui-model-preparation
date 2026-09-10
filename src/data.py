@@ -16,6 +16,15 @@ from pathlib import Path
 from typing import Optional, List, Dict, Tuple, Any
 
 try:
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    PYARROW_AVAILABLE = True
+except ImportError:
+    pa = None  # type: ignore
+    pq = None  # type: ignore
+    PYARROW_AVAILABLE = False
+
+try:
     from config import load_config, PipelineConfig
 except ImportError:
     try:
@@ -24,6 +33,33 @@ except ImportError:
     except ImportError:
         load_config = None
         PipelineConfig = None
+
+# Cross-dataset Canonical Event Schema
+if PYARROW_AVAILABLE:
+    CANONICAL_EVENT_SCHEMA = pa.schema([
+        ("dataset_id", pa.string()),
+        ("session_id", pa.string()),
+        ("user_id", pa.string()),          # Nullable
+        ("trial_id", pa.string()),         # Nullable
+        ("timestamp_ms", pa.int64()),
+        ("event_type", pa.string()),
+        ("x", pa.float32()),               # Nullable
+        ("y", pa.float32()),               # Nullable
+        ("x_norm", pa.float32()),          # Nullable [0, 1]
+        ("y_norm", pa.float32()),          # Nullable [0, 1]
+        ("viewport_width", pa.float32()),  # Nullable
+        ("viewport_height", pa.float32()), # Nullable
+        ("document_width", pa.float32()),  # Nullable
+        ("document_height", pa.float32()), # Nullable
+        ("target_id", pa.string()),        # Nullable (XPath or DOM ID)
+        ("source_event_id", pa.string()),  # Nullable
+        ("duration_ms", pa.float32()),     # Nullable
+        ("angle_deg", pa.float32()),       # Nullable
+        ("distance_px", pa.float32()),     # Nullable
+        ("velocity_px_s", pa.float32())    # Nullable
+    ])
+else:
+    CANONICAL_EVENT_SCHEMA = None
 
 
 def find_project_root() -> Path:
@@ -134,6 +170,54 @@ def resolve_adserp_dir(custom_raw_dir: Optional[str] = None) -> Optional[Path]:
             csv_check = any((c / "mouse-movement-data").glob("*.csv"))
             if csv_check:
                 return c
+    return None
+
+
+def resolve_continuous_kinematics_dir(custom_raw_dir: Optional[str] = None) -> Optional[Path]:
+    """Search candidate directories for verified Continuous Kinematics 2020 dataset."""
+    root = find_project_root()
+    candidates: List[Path] = []
+    if custom_raw_dir:
+        c_p = Path(custom_raw_dir).resolve()
+        candidates.extend([
+            c_p,
+            c_p / "continuous-kinematics-2020",
+            c_p / "raw" / "continuous-kinematics-2020"
+        ])
+    candidates.extend([
+        root / ".data" / "raw" / "continuous-kinematics-2020",
+        root / ".data" / "raw" / "raw" / "continuous-kinematics-2020",
+        root.parent / "data-sources" / "continuous-kinematics-2020",
+        Path("/Users/user/Workspace/MivaCS/FYP/data-sources/continuous-kinematics-2020")
+    ])
+    for c in candidates:
+        if c.is_dir() and (c / "logs").is_dir():
+            csv_check = any((c / "logs").glob("*.csv"))
+            if csv_check:
+                return c
+    return None
+
+
+def resolve_high_volume_trajectories_dir(custom_raw_dir: Optional[str] = None) -> Optional[Path]:
+    """Search candidate directories for verified High-Volume Trajectories 20226 dataset."""
+    root = find_project_root()
+    candidates: List[Path] = []
+    if custom_raw_dir:
+        c_p = Path(custom_raw_dir).resolve()
+        candidates.extend([
+            c_p,
+            c_p / "high-volume-trajectories-20226",
+            c_p / "raw" / "high-volume-trajectories-20226"
+        ])
+    candidates.extend([
+        root / ".data" / "raw" / "high-volume-trajectories-20226",
+        root / ".data" / "raw" / "raw" / "high-volume-trajectories-20226",
+        root.parent / "data-sources" / "high-volume-trajectories-20226",
+        Path("/Users/user/Workspace/MivaCS/FYP/data-sources/high-volume-trajectories-20226")
+    ])
+    for c in candidates:
+        if c.is_dir() and ((c / "dataset.csv").is_file() or (c / "dataset_part.csv").is_file()):
+            return c
     return None
 
 
@@ -402,16 +486,407 @@ def consolidate_adserp_sessions(
     return str(csvgz_out)
 
 
+# ============================================================================
+# Canonical Parquet Conversion Adapters (Phase B, C, E, F)
+# ============================================================================
+
+def convert_adserp_to_canonical(
+    raw_path: Optional[str] = None,
+    output_path: Optional[str] = None,
+    max_sessions: Optional[int] = None,
+    force: bool = False
+) -> str:
+    """
+    Convert raw AdSERP CSV and companion XML files into canonical Parquet format.
+    Stores canonical events under .data/canonical/adserp/data.parquet.
+    """
+    if not PYARROW_AVAILABLE or CANONICAL_EVENT_SCHEMA is None:
+        raise RuntimeError("PyArrow is required for canonical Parquet conversion.")
+
+    root = find_project_root()
+    adserp_dir = Path(raw_path or resolve_adserp_dir() or ensure_adserp_dataset())
+    if not adserp_dir or not adserp_dir.is_dir():
+        raise FileNotFoundError(f"AdSERP dataset directory not found at {adserp_dir}")
+
+    out_file = Path(output_path or (root / ".data" / "canonical" / "adserp" / "data.parquet")).resolve()
+    if not force and out_file.is_file() and out_file.stat().st_size > 0:
+        print(f"[Canonical] Using cached canonical AdSERP Parquet: {out_file}")
+        return str(out_file)
+
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    mouse_dir = adserp_dir / "mouse-movement-data"
+    meta_dir = adserp_dir / "trial-metadata"
+
+    if not mouse_dir.is_dir():
+        raise FileNotFoundError(f"Missing mouse-movement-data directory at {mouse_dir}")
+
+    csv_files = sorted(list(mouse_dir.glob("*.csv")))
+    if max_sessions:
+        csv_files = csv_files[:max_sessions]
+
+    print(f"[Canonical] Converting {len(csv_files)} AdSERP sessions to canonical Parquet ({out_file})...")
+
+    writer = pq.ParquetWriter(str(out_file), schema=CANONICAL_EVENT_SCHEMA, compression="snappy")
+    batch_rows: List[Dict[str, Any]] = []
+    total_events = 0
+
+    try:
+        for i, csv_file in enumerate(csv_files):
+            session_id = csv_file.stem
+            parts = session_id.split("-")
+            user_id = parts[0] if len(parts) >= 1 else None
+            trial_id = "-".join(parts[1:]) if len(parts) > 1 else None
+
+            xml_file = meta_dir / f"{session_id}.xml"
+            if not xml_file.is_file():
+                continue
+            try:
+                (vp_w, vp_h), (doc_w, doc_h) = parse_viewport_metadata(str(xml_file))
+            except Exception:
+                continue
+
+            session_events = []
+            with open(csv_file, "r", encoding="utf-8") as f:
+                header = f.readline().strip().split(",")
+                for line in f:
+                    line_str = line.strip()
+                    if not line_str:
+                        continue
+                    p = line_str.split(",")
+                    if len(p) >= 4:
+                        try:
+                            ts = int(p[0])
+                            x = float(p[1])
+                            y = float(p[2])
+                            ev = p[3]
+                            xpath = p[4] if len(p) > 4 and p[4] not in ("", "/", "/html") else None
+
+                            x_norm = max(0.0, min(1.0, x / max(vp_w, 1.0)))
+                            y_norm = max(0.0, min(1.0, y / max(vp_h, 1.0)))
+
+                            session_events.append({
+                                "dataset_id": "adserp",
+                                "session_id": session_id,
+                                "user_id": user_id,
+                                "trial_id": trial_id,
+                                "timestamp_ms": ts,
+                                "event_type": ev,
+                                "x": float(x),
+                                "y": float(y),
+                                "x_norm": float(x_norm),
+                                "y_norm": float(y_norm),
+                                "viewport_width": float(vp_w),
+                                "viewport_height": float(vp_h),
+                                "document_width": float(doc_w),
+                                "document_height": float(doc_h),
+                                "target_id": xpath,
+                                "source_event_id": None,
+                                "duration_ms": None,
+                                "angle_deg": None,
+                                "distance_px": None,
+                                "velocity_px_s": None
+                            })
+                        except (ValueError, IndexError):
+                            continue
+
+            session_events.sort(key=lambda e: e["timestamp_ms"])
+            batch_rows.extend(session_events)
+
+            if len(batch_rows) >= 50_000 or (i == len(csv_files) - 1 and batch_rows):
+                table = pa.Table.from_pylist(batch_rows, schema=CANONICAL_EVENT_SCHEMA)
+                writer.write_table(table)
+                total_events += len(batch_rows)
+                batch_rows = []
+
+    finally:
+        writer.close()
+
+    print(f"[Canonical] Successfully wrote {total_events} events across {len(csv_files)} sessions to {out_file} ({out_file.stat().st_size / 1024 / 1024:.2f} MB)")
+    return str(out_file)
+
+
+def convert_continuous_kinematics_to_canonical(
+    raw_path: Optional[str] = None,
+    output_path: Optional[str] = None,
+    max_sessions: Optional[int] = None,
+    force: bool = False
+) -> str:
+    """
+    Convert Continuous Kinematics 2020 space-delimited logs and companion XMLs into canonical Parquet.
+    Joins participants.tsv to assign verified user_id to each session.
+    """
+    if not PYARROW_AVAILABLE or CANONICAL_EVENT_SCHEMA is None:
+        raise RuntimeError("PyArrow is required for canonical Parquet conversion.")
+
+    root = find_project_root()
+    ck_dir = Path(raw_path or resolve_continuous_kinematics_dir())
+    if not ck_dir or not ck_dir.is_dir():
+        raise FileNotFoundError(f"Continuous Kinematics dataset directory not found at {ck_dir}")
+
+    out_file = Path(output_path or (root / ".data" / "canonical" / "continuous_kinematics" / "data.parquet")).resolve()
+    if not force and out_file.is_file() and out_file.stat().st_size > 0:
+        print(f"[Canonical] Using cached canonical Continuous Kinematics Parquet: {out_file}")
+        return str(out_file)
+
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+
+    # Load participants.tsv mapping log_id -> (user_id, serp_id)
+    participants_map: Dict[str, Tuple[str, str]] = {}
+    parts_tsv = ck_dir / "participants.tsv"
+    if parts_tsv.is_file():
+        with open(parts_tsv, "r", encoding="utf-8") as f:
+            header = f.readline().strip().split("\t")
+            user_idx = header.index("user_id") if "user_id" in header else 0
+            log_idx = header.index("log_id") if "log_id" in header else 11
+            serp_idx = header.index("serp_id") if "serp_id" in header else 9
+            for line in f:
+                parts = line.strip().split("\t")
+                if len(parts) > max(user_idx, log_idx, serp_idx):
+                    participants_map[parts[log_idx]] = (parts[user_idx], parts[serp_idx])
+
+    logs_dir = ck_dir / "logs"
+    if not logs_dir.is_dir():
+        raise FileNotFoundError(f"Missing logs directory in Continuous Kinematics at {logs_dir}")
+
+    csv_files = sorted(list(logs_dir.glob("*.csv")))
+    if max_sessions:
+        csv_files = csv_files[:max_sessions]
+
+    print(f"[Canonical] Converting {len(csv_files)} Continuous Kinematics sessions to canonical Parquet ({out_file})...")
+
+    writer = pq.ParquetWriter(str(out_file), schema=CANONICAL_EVENT_SCHEMA, compression="snappy")
+    batch_rows: List[Dict[str, Any]] = []
+    total_events = 0
+
+    try:
+        for i, csv_file in enumerate(csv_files):
+            log_id = csv_file.stem
+            user_id, trial_id = participants_map.get(log_id, (None, None))
+
+            xml_file = logs_dir / f"{log_id}.xml"
+            vp_w, vp_h = 1366.0, 768.0
+            doc_w, doc_h = 1366.0, 2000.0
+            if xml_file.is_file():
+                try:
+                    (vp_w, vp_h), (doc_w, doc_h) = parse_viewport_metadata(str(xml_file))
+                except Exception:
+                    pass
+
+            session_events = []
+            with open(csv_file, "r", encoding="utf-8") as f:
+                header = f.readline().strip().split()
+                for line in f:
+                    line_str = line.strip()
+                    if not line_str:
+                        continue
+                    p = line_str.split()
+                    if len(p) >= 5:
+                        try:
+                            ts = int(p[1])
+                            x = float(p[2])
+                            y = float(p[3])
+                            ev = p[4]
+                            xpath = p[5] if len(p) > 5 and p[5] not in ("/", "/html", "{}") else None
+
+                            x_norm = max(0.0, min(1.0, x / max(vp_w, 1.0)))
+                            y_norm = max(0.0, min(1.0, y / max(vp_h, 1.0)))
+
+                            session_events.append({
+                                "dataset_id": "continuous_kinematics",
+                                "session_id": log_id,
+                                "user_id": user_id,
+                                "trial_id": trial_id,
+                                "timestamp_ms": ts,
+                                "event_type": ev,
+                                "x": float(x),
+                                "y": float(y),
+                                "x_norm": float(x_norm),
+                                "y_norm": float(y_norm),
+                                "viewport_width": float(vp_w),
+                                "viewport_height": float(vp_h),
+                                "document_width": float(doc_w),
+                                "document_height": float(doc_h),
+                                "target_id": xpath,
+                                "source_event_id": p[0],
+                                "duration_ms": None,
+                                "angle_deg": None,
+                                "distance_px": None,
+                                "velocity_px_s": None
+                            })
+                        except (ValueError, IndexError):
+                            continue
+
+            session_events.sort(key=lambda e: e["timestamp_ms"])
+            batch_rows.extend(session_events)
+
+            if len(batch_rows) >= 50_000 or (i == len(csv_files) - 1 and batch_rows):
+                table = pa.Table.from_pylist(batch_rows, schema=CANONICAL_EVENT_SCHEMA)
+                writer.write_table(table)
+                total_events += len(batch_rows)
+                batch_rows = []
+
+    finally:
+        writer.close()
+
+    print(f"[Canonical] Successfully wrote {total_events} events across {len(csv_files)} sessions to {out_file} ({out_file.stat().st_size / 1024 / 1024:.2f} MB)")
+    return str(out_file)
+
+
+def convert_high_volume_trajectories_to_canonical(
+    raw_path: Optional[str] = None,
+    output_path: Optional[str] = None,
+    max_rows: Optional[int] = None,
+    chunk_size: int = 500_000,
+    force: bool = False
+) -> str:
+    """
+    Convert High-Volume Trajectories 20226 semicolon-delimited CSV into canonical Parquet.
+    Streams large files in chunks without fabricating web coordinates or viewports.
+    """
+    if not PYARROW_AVAILABLE or CANONICAL_EVENT_SCHEMA is None:
+        raise RuntimeError("PyArrow is required for canonical Parquet conversion.")
+
+    try:
+        import pandas as pd
+    except ImportError:
+        raise RuntimeError("pandas is required for streaming high-volume trajectory chunks.")
+
+    root = find_project_root()
+    hvt_dir = Path(raw_path or resolve_high_volume_trajectories_dir())
+    if not hvt_dir or not hvt_dir.is_dir():
+        raise FileNotFoundError(f"High-Volume Trajectories dataset directory not found at {hvt_dir}")
+
+    csv_candidate = hvt_dir / "dataset.csv"
+    if not csv_candidate.is_file():
+        csv_candidate = hvt_dir / "dataset_part.csv"
+    if not csv_candidate.is_file():
+        raise FileNotFoundError(f"Neither dataset.csv nor dataset_part.csv found in {hvt_dir}")
+
+    out_file = Path(output_path or (root / ".data" / "canonical" / "high_volume_trajectories" / "data.parquet")).resolve()
+    if not force and out_file.is_file() and out_file.stat().st_size > 0:
+        print(f"[Canonical] Using cached canonical High-Volume Trajectories Parquet: {out_file}")
+        return str(out_file)
+
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    print(f"[Canonical] Streaming {csv_candidate} in chunks of {chunk_size} rows to canonical Parquet ({out_file})...")
+
+    writer = pq.ParquetWriter(str(out_file), schema=CANONICAL_EVENT_SCHEMA, compression="snappy")
+    total_events = 0
+    reader = pd.read_csv(csv_candidate, sep=";", chunksize=chunk_size, low_memory=False)
+
+    try:
+        for chunk in reader:
+            if max_rows and total_events >= max_rows:
+                break
+            if max_rows and total_events + len(chunk) > max_rows:
+                chunk = chunk.iloc[: max_rows - total_events]
+
+            # Timestamp parsing
+            dt_series = pd.to_datetime(chunk["local_date"].astype(str) + " " + chunk["local_time"].astype(str), errors="coerce")
+            ts_ms = (dt_series.astype("int64") // 10**6).values
+
+            user_ids = chunk["idman"].astype(str).values
+            durations = pd.to_numeric(chunk["duration"], errors="coerce").values
+            angles = pd.to_numeric(chunk["angle"], errors="coerce").values
+            distances = pd.to_numeric(chunk["distance"], errors="coerce").values
+            velocities = pd.to_numeric(chunk["velocity"], errors="coerce").values
+
+            # event_type: dwell or movement
+            event_types = ["dwell" if (d is not None and not (isinstance(d, float) and pd.isna(d)) and d > 0) else "movement" for d in durations]
+
+            batch_dict = {
+                "dataset_id": ["high_volume_trajectories"] * len(chunk),
+                "session_id": user_ids.tolist(),
+                "user_id": user_ids.tolist(),
+                "trial_id": [None] * len(chunk),
+                "timestamp_ms": ts_ms.tolist(),
+                "event_type": event_types,
+                "x": [None] * len(chunk),
+                "y": [None] * len(chunk),
+                "x_norm": [None] * len(chunk),
+                "y_norm": [None] * len(chunk),
+                "viewport_width": [None] * len(chunk),
+                "viewport_height": [None] * len(chunk),
+                "document_width": [None] * len(chunk),
+                "document_height": [None] * len(chunk),
+                "target_id": [None] * len(chunk),
+                "source_event_id": [None] * len(chunk),
+                "duration_ms": [float(d) if pd.notna(d) else None for d in durations],
+                "angle_deg": [float(a) if pd.notna(a) else None for a in angles],
+                "distance_px": [float(dist) if pd.notna(dist) else None for dist in distances],
+                "velocity_px_s": [float(v) if pd.notna(v) else None for v in velocities]
+            }
+
+            table = pa.Table.from_pydict(batch_dict, schema=CANONICAL_EVENT_SCHEMA)
+            writer.write_table(table)
+            total_events += len(chunk)
+            print(f"  Processed {total_events:,} events...")
+
+    finally:
+        reader.close()
+        writer.close()
+
+    print(f"[Canonical] Successfully wrote {total_events:,} events to {out_file} ({out_file.stat().st_size / 1024 / 1024:.2f} MB)")
+    return str(out_file)
+
+
+def canonicalize_all_datasets(
+    canonical_dir: Optional[str] = None,
+    force: bool = False
+) -> Dict[str, str]:
+    """
+    Run canonical conversion across all candidate interaction datasets.
+    Creates canonical Parquet files under .data/canonical/.
+    """
+    root = find_project_root()
+    base_canon = Path(canonical_dir or (root / ".data" / "canonical")).resolve()
+    results: Dict[str, str] = {}
+
+    # 1. AdSERP
+    try:
+        adserp_out = base_canon / "adserp" / "data.parquet"
+        results["adserp"] = convert_adserp_to_canonical(output_path=str(adserp_out), force=force)
+    except Exception as e:
+        print(f"[Canonical] Note on AdSERP conversion: {e}")
+
+    # 2. Continuous Kinematics
+    try:
+        ck_out = base_canon / "continuous_kinematics" / "data.parquet"
+        results["continuous_kinematics"] = convert_continuous_kinematics_to_canonical(output_path=str(ck_out), force=force)
+    except Exception as e:
+        print(f"[Canonical] Note on Continuous Kinematics conversion: {e}")
+
+    # 3. High-Volume Trajectories
+    try:
+        hvt_out = base_canon / "high_volume_trajectories" / "data.parquet"
+        results["high_volume_trajectories"] = convert_high_volume_trajectories_to_canonical(output_path=str(hvt_out), force=force)
+    except Exception as e:
+        print(f"[Canonical] Note on High-Volume Trajectories conversion: {e}")
+
+    return results
+
+
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Edge-AUI Data Ingestion & Consolidation Driver")
+    parser = argparse.ArgumentParser(description="Edge-AUI Data Ingestion & Canonical Parquet Driver")
     parser.add_argument("--mode", type=str, default="minimal")
-    parser.add_argument("--max-sessions", type=int, default=50, help="Cap sessions for fast ingestion test")
-    parser.add_argument("--force", action="store_true", help="Force re-consolidation")
+    parser.add_argument("--max-sessions", type=int, default=None, help="Cap sessions for test run")
+    parser.add_argument("--max-rows", type=int, default=None, help="Cap rows for HVT test run")
+    parser.add_argument("--canonicalize", type=str, default=None, choices=["all", "adserp", "ck", "hvt"], help="Execute canonical Parquet conversion")
+    parser.add_argument("--force", action="store_true", help="Force re-conversion")
     args = parser.parse_args()
 
-    adserp_path = ensure_adserp_dataset()
-    print(f"[Data Driver] Verified AdSERP path: {adserp_path}")
-
-    consolidated = consolidate_adserp_sessions(raw_path=adserp_path, max_sessions=args.max_sessions, force=args.force)
-    print(f"[Data Driver] Consolidated dataset ready at: {consolidated}")
+    if args.canonicalize:
+        if args.canonicalize == "all":
+            canonicalize_all_datasets(force=args.force)
+        elif args.canonicalize == "adserp":
+            convert_adserp_to_canonical(max_sessions=args.max_sessions, force=args.force)
+        elif args.canonicalize == "ck":
+            convert_continuous_kinematics_to_canonical(max_sessions=args.max_sessions, force=args.force)
+        elif args.canonicalize == "hvt":
+            convert_high_volume_trajectories_to_canonical(max_rows=args.max_rows, force=args.force)
+    else:
+        adserp_path = ensure_adserp_dataset()
+        print(f"[Data Driver] Verified AdSERP path: {adserp_path}")
+        consolidated = consolidate_adserp_sessions(raw_path=adserp_path, max_sessions=args.max_sessions or 50, force=args.force)
+        print(f"[Data Driver] Consolidated dataset ready at: {consolidated}")

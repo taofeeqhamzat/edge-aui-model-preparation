@@ -10,15 +10,30 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 
+# Single source of truth for MicroTensor dimensionality
+NUM_BEHAVIOURAL_FEATURES: int = 9
+MICROTENSOR_DIM: int = 18  # 9 features + 9 binary modality masks = 18
+
 
 @dataclass
 class DataConfig:
     raw_dir: str = ".data/raw"
+    canonical_dir: str = ".data/canonical"
     interim_dir: str = ".data/interim"
     processed_dir: str = ".data/processed"
     dvc_remote: str = "hfremote"
     hf_repo: str = "T40/edge-aui-framework-data"
     consolidate_parquet: bool = True
+
+
+@dataclass
+class NormalizationConfig:
+    mean_velocity_scale: float = 10.0
+    max_velocity_scale: float = 10.0
+    mean_acceleration_scale: float = 0.1
+    hesitation_scale: float = 10.0
+    trajectory_scale: float = 2000.0
+    scroll_velocity_scale: float = 5.0
 
 
 @dataclass
@@ -39,9 +54,10 @@ class PreprocessingConfig:
         "scrollDepthPercentage",
         "scrollVelocity"
     ])
-    num_features: int = 9
-    input_dim: int = 18  # 9 features * 2 (with binary modality mask [X * M, M])
+    num_features: int = NUM_BEHAVIOURAL_FEATURES
+    input_dim: int = MICROTENSOR_DIM  # 9 features * 2 (with binary modality mask [X * M, M])
     min_events_per_window: int = 3
+    normalization: NormalizationConfig = field(default_factory=NormalizationConfig)
 
 
 @dataclass
@@ -225,6 +241,7 @@ def load_config(
     data_dict = raw_dict.get("data", {})
     data_cfg = DataConfig(
         raw_dir=overrides.get("raw_dir", data_dict.get("raw_dir", ".data/raw")),
+        canonical_dir=overrides.get("canonical_dir", data_dict.get("canonical_dir", ".data/canonical")),
         interim_dir=overrides.get("interim_dir", data_dict.get("interim_dir", ".data/interim")),
         processed_dir=overrides.get("processed_dir", data_dict.get("processed_dir", ".data/processed")),
         dvc_remote=data_dict.get("dvc_remote", "hfremote"),
@@ -233,12 +250,22 @@ def load_config(
     )
 
     prep_dict = raw_dict.get("preprocessing", {})
+    norm_dict = prep_dict.get("normalization", {})
+    norm_cfg = NormalizationConfig(
+        mean_velocity_scale=norm_dict.get("mean_velocity_scale", 10.0),
+        max_velocity_scale=norm_dict.get("max_velocity_scale", 10.0),
+        mean_acceleration_scale=norm_dict.get("mean_acceleration_scale", 0.1),
+        hesitation_scale=norm_dict.get("hesitation_scale", 10.0),
+        trajectory_scale=norm_dict.get("trajectory_scale", 2000.0),
+        scroll_velocity_scale=norm_dict.get("scroll_velocity_scale", 5.0)
+    )
     prep_cfg = PreprocessingConfig(
         window_size_ms=prep_dict.get("window_size_ms", 500),
         stride_ms=prep_dict.get("stride_ms", 250),
-        num_features=prep_dict.get("num_features", 9),
-        input_dim=prep_dict.get("input_dim", 18),
-        min_events_per_window=prep_dict.get("min_events_per_window", 3)
+        num_features=prep_dict.get("num_features", NUM_BEHAVIOURAL_FEATURES),
+        input_dim=prep_dict.get("input_dim", MICROTENSOR_DIM),
+        min_events_per_window=prep_dict.get("min_events_per_window", 3),
+        normalization=norm_cfg
     )
 
     train_dict = raw_dict.get("training", {})

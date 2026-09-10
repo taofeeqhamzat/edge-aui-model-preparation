@@ -18,6 +18,7 @@ modes:
 
 data:
   raw_dir: ".data/raw"
+  canonical_dir: ".data/canonical"
   interim_dir: ".data/interim"
   processed_dir: ".data/processed"
   dvc_remote: "hfremote"
@@ -42,6 +43,13 @@ preprocessing:
   num_features: 9
   input_dim: 18 # 9 features * 2 (modality masking: [X * M, M])
   min_events_per_window: 3
+  normalization:
+    mean_velocity_scale: 10.0
+    max_velocity_scale: 10.0
+    mean_acceleration_scale: 0.1
+    hesitation_scale: 10.0
+    trajectory_scale: 2000.0
+    scroll_velocity_scale: 5.0
 
 target_generation:
   lookahead_horizon_ms: [500, 1500]

@@ -11,8 +11,12 @@ models/
 *.onnx.data
 
 # Local data cache
+.data/canonical/*
+!.data/canonical/**/.gitkeep
 .data/interim/*
 !.data/interim/.gitkeep
+.data/interim/microtensors/*
+!.data/interim/microtensors/**/.gitkeep
 .data/processed/*
 !.data/processed/.gitkeep
 
