@@ -1,5 +1,3 @@
-instructions.md
-instructions*.md
 secret.txt
 .env*
 .venv/
@@ -24,3 +22,5 @@ models/
 docs/plan/**/*.md
 docs/plan/*.md
 !docs/plan/**/.gitkeep
+clipboard*.md
+instructions*.md
