@@ -30,8 +30,8 @@ class DataConfig:
 class NormalizationConfig:
     mean_velocity_scale: float = 10.0
     max_velocity_scale: float = 10.0
-    mean_acceleration_scale: float = 0.1
-    hesitation_scale: float = 10.0
+    mean_acceleration_scale: float = 1.0
+    hesitation_scale: float = 25.0
     trajectory_scale: float = 2000.0
     scroll_velocity_scale: float = 5.0
 

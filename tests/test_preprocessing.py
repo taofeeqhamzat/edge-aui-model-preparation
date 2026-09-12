@@ -105,6 +105,87 @@ class TestMicroTensorExtraction(unittest.TestCase):
         self.assertEqual(t_no_scroll[0, 7], 0.0)
         self.assertEqual(t_no_scroll[0, 8], 0.0)
 
+    def test_stationary_cursor_with_active_mask(self):
+        """Verify stationary cursor produces zero velocity but retains active capability mask (ADR-001)."""
+        # Single pointer event or zero movement in window:
+        window_evs = [{
+            "timestamp_ms": 100,
+            "event_type": "mousemove",
+            "x_norm": 0.5,
+            "y_norm": 0.5,
+            "x_raw": 960.0,
+            "y_raw": 540.0
+        }]
+        t = preprocessing.compute_window_microtensor(
+            window_evs,
+            viewport=(1920.0, 1080.0),
+            document=(1920.0, 3000.0),
+            has_pointer_support=True,
+            has_dom_support=True,
+            has_scroll_support=True
+        )
+        # Kinematics are zero (stationary)
+        self.assertEqual(t[0], 0.0)  # meanVelocity
+        self.assertEqual(t[1], 0.0)  # maxVelocity
+        self.assertEqual(t[2], 0.0)  # meanAcceleration
+        self.assertEqual(t[3], 0.0)  # hesitationCount
+        self.assertEqual(t[4], 0.0)  # totalTrajectoryLength
+        # But pointer modality mask is ACTIVE (sensor is present, observing stillness)
+        self.assertEqual(t[9 + 0], 1.0)
+        self.assertEqual(t[9 + 1], 1.0)
+        self.assertEqual(t[9 + 2], 1.0)
+        self.assertEqual(t[9 + 3], 1.0)
+        self.assertEqual(t[9 + 4], 1.0)
+        self.assertEqual(t[9 + 6], 1.0)
+
+    def test_hover_dwell_with_zero_pointer_motion(self):
+        """Verify DOM dwell time accumulates and is preserved even with zero pointer movements."""
+        window_evs = [
+            {"timestamp_ms": 100, "event_type": "mouseover", "xpath": "//*[@id='submit-btn']"},
+            {"timestamp_ms": 200, "event_type": "mouseover", "xpath": "//*[@id='submit-btn']"},
+            {"timestamp_ms": 300, "event_type": "mouseover", "xpath": "//*[@id='submit-btn']"}
+        ]
+        t = preprocessing.compute_window_microtensor(
+            window_evs,
+            viewport=(1920.0, 1080.0),
+            document=(1920.0, 3000.0),
+            has_pointer_support=True,
+            has_dom_support=True,
+            has_scroll_support=True
+        )
+        # 3 events * 40ms = 120ms / 500ms = 0.24
+        self.assertAlmostEqual(t[5], 0.24, places=3)
+        # DOM mask is active
+        self.assertEqual(t[9 + 5], 1.0)
+
+    def test_sensor_absence_masking(self):
+        """Verify missing sensor support deactivates corresponding mask dimensions."""
+        window_evs = [
+            {"timestamp_ms": 100, "event_type": "mousemove", "x_norm": 0.5, "y_norm": 0.5, "x_raw": 960.0, "y_raw": 540.0},
+            {"timestamp_ms": 200, "event_type": "mousemove", "x_norm": 0.6, "y_norm": 0.5, "x_raw": 1152.0, "y_raw": 540.0},
+            {"timestamp_ms": 250, "event_type": "scroll"},
+            {"timestamp_ms": 300, "event_type": "mouseover", "xpath": "//*[@id='btn']"}
+        ]
+        # Dataset with pointer only, no DOM and no scroll
+        t = preprocessing.compute_window_microtensor(
+            window_evs,
+            viewport=(1920.0, 1080.0),
+            document=(1920.0, 3000.0),
+            has_pointer_support=True,
+            has_dom_support=False,
+            has_scroll_support=False
+        )
+        # Pointer mask active, DOM and scroll inactive
+        self.assertEqual(t[9 + 0], 1.0)
+        self.assertEqual(t[9 + 5], 0.0)  # DOM mask
+        self.assertEqual(t[9 + 7], 0.0)  # scroll depth mask
+        self.assertEqual(t[9 + 8], 0.0)  # scroll vel mask
+        # Masked features must be strictly 0.0
+        self.assertEqual(t[5], 0.0)
+        self.assertEqual(t[7], 0.0)
+        self.assertEqual(t[8], 0.0)
+
+
     def test_session_extraction_on_real_adserp(self):
         """Test extraction directly on real AdSERP session events."""
         events = preprocessing.parse_adserp_session("p004-b1-t1.csv")

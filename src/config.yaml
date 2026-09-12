@@ -46,8 +46,8 @@ preprocessing:
   normalization:
     mean_velocity_scale: 10.0
     max_velocity_scale: 10.0
-    mean_acceleration_scale: 0.1
-    hesitation_scale: 10.0
+    mean_acceleration_scale: 1.0
+    hesitation_scale: 25.0
     trajectory_scale: 2000.0
     scroll_velocity_scale: 5.0
 

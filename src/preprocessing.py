@@ -310,6 +310,8 @@ def compute_window_microtensor(
     viewport: Tuple[float, float],
     document: Tuple[float, float],
     window_duration_ms: float = 500.0,
+    has_pointer_support: bool = True,
+    has_dom_support: bool = True,
     has_scroll_support: bool = True,
     scales: Optional[Dict[str, float]] = None
 ) -> np.ndarray:
@@ -331,14 +333,27 @@ def compute_window_microtensor(
     scale_dict = {
         "velocity": 10.0,
         "max_velocity": 10.0,
-        "acceleration": 0.1,
-        "hesitation": 10.0,
+        "acceleration": 1.0,
+        "hesitation": 25.0,
         "trajectory": 2000.0,
         "scroll_velocity": 5.0
     }
     if scales:
-        scale_dict.update(scales)
+        alias_map = {
+            "mean_velocity_scale": "velocity",
+            "mean_velocity": "velocity",
+            "max_velocity_scale": "max_velocity",
+            "mean_acceleration_scale": "acceleration",
+            "acceleration_scale": "acceleration",
+            "hesitation_scale": "hesitation",
+            "trajectory_scale": "trajectory",
+            "scroll_velocity_scale": "scroll_velocity"
+        }
+        for k, v in scales.items():
+            canonical_key = alias_map.get(k, k)
+            scale_dict[canonical_key] = float(v)
 
+    # 1. Initialize Kinematics (Natural zeros represent user physical rest)
     mean_vel = 0.0
     max_vel = 0.0
     mean_accel = 0.0
@@ -351,74 +366,85 @@ def compute_window_microtensor(
 
     mask = np.zeros(NUM_FEATURES, dtype=np.float32)
 
-    pointer_events = [
-        ev for ev in events
-        if ev.get("event_type") in ("mousemove", "mouseover", "mousedown", "mouseup", "click")
-    ]
-
-    if len(pointer_events) >= 2:
-        mask[:7] = 1.0
-
-        t_arr = np.array([ev["timestamp_ms"] for ev in pointer_events], dtype=np.float64)
-        x_norm = np.array([ev["x_norm"] for ev in pointer_events], dtype=np.float64)
-        y_norm = np.array([ev["y_norm"] for ev in pointer_events], dtype=np.float64)
-
-        if "x" in pointer_events[0] and pointer_events[0]["x"] is not None and "y" in pointer_events[0] and pointer_events[0]["y"] is not None:
-            dx_px = np.diff(np.array([ev["x"] for ev in pointer_events], dtype=np.float64))
-            dy_px = np.diff(np.array([ev["y"] for ev in pointer_events], dtype=np.float64))
-        elif "x_raw" in pointer_events[0] and pointer_events[0]["x_raw"] is not None and "y_raw" in pointer_events[0] and pointer_events[0]["y_raw"] is not None:
-            dx_px = np.diff(np.array([ev["x_raw"] for ev in pointer_events], dtype=np.float64))
-            dy_px = np.diff(np.array([ev["y_raw"] for ev in pointer_events], dtype=np.float64))
-        else:
-            dx_px = np.diff(x_norm) * vp_w
-            dy_px = np.diff(y_norm) * vp_h
-
-        dt_ms = np.diff(t_arr)
-        dt_ms = np.where(dt_ms <= 0, 1.0, dt_ms)
-
-        distances = np.sqrt(dx_px**2 + dy_px**2)
-        total_traj_len = float(np.sum(distances))
-
-        velocities = distances / dt_ms
-        if len(velocities) > 0:
-            mean_vel = float(np.mean(velocities))
-            max_vel = float(np.max(velocities))
-
-        if len(velocities) >= 2:
-            dt_acc = dt_ms[1:]
-            dt_acc = np.where(dt_acc <= 0, 1.0, dt_acc)
-            accels = np.abs(np.diff(velocities)) / dt_acc
-            mean_accel = float(np.mean(accels))
-
-        if len(dx_px) >= 2:
-            angles = np.arctan2(dy_px, dx_px)
-            angle_diffs = np.abs(np.diff(angles))
-            angle_diffs = np.where(angle_diffs > np.pi, 2 * np.pi - angle_diffs, angle_diffs)
-            hesitation_cnt = float(np.sum(angle_diffs > (np.pi / 4.0)))
-
-            hist, _ = np.histogram(angles, bins=8, range=(-np.pi, np.pi), density=False)
-            hist_sum = hist.sum()
-            if hist_sum > 0:
-                p = hist[hist > 0] / hist_sum
-                trajectory_entropy = float(-np.sum(p * np.log2(p)) / 3.0)
-
-    def _is_valid_dom_target(t: Any) -> bool:
-        if t is None or isinstance(t, (float, int)):
-            return False
-        t_str = str(t).strip()
-        return bool(t_str and t_str not in ("/", "/html", "nan", "None", "{}"))
-
-    dwell_evs = [
-        ev for ev in events
-        if ev.get("event_type") == "mouseover"
-        or _is_valid_dom_target(ev.get("target_id"))
-        or _is_valid_dom_target(ev.get("xpath"))
-    ]
-    dwell_time_ms = min(float(len(dwell_evs) * 40.0), float(window_duration_ms))
-
-    scroll_events = [ev for ev in events if ev.get("event_type") in ("scroll", "wheel")]
+    # 2. Modality Capability Assignment (ADR-001)
+    if has_pointer_support:
+        mask[[0, 1, 2, 3, 4, 6]] = 1.0
+    if has_dom_support:
+        mask[5] = 1.0
     if has_scroll_support:
-        mask[7:] = 1.0
+        mask[[7, 8]] = 1.0
+
+    # 3. Pointer Kinematics Extraction (Conditioned on support and >= 2 coordinates)
+    if has_pointer_support:
+        pointer_events = [
+            ev for ev in events
+            if ev.get("event_type") in ("mousemove", "mouseover", "mousedown", "mouseup", "click")
+            and (ev.get("x_norm") is not None or ev.get("x") is not None or ev.get("x_raw") is not None)
+        ]
+
+        if len(pointer_events) >= 2:
+            t_arr = np.array([ev.get("timestamp_ms", 0) for ev in pointer_events], dtype=np.float64)
+            x_norm = np.array([ev.get("x_norm", 0.0) for ev in pointer_events], dtype=np.float64)
+            y_norm = np.array([ev.get("y_norm", 0.0) for ev in pointer_events], dtype=np.float64)
+
+            if "x" in pointer_events[0] and pointer_events[0]["x"] is not None and "y" in pointer_events[0] and pointer_events[0]["y"] is not None:
+                dx_px = np.diff(np.array([ev["x"] for ev in pointer_events], dtype=np.float64))
+                dy_px = np.diff(np.array([ev["y"] for ev in pointer_events], dtype=np.float64))
+            elif "x_raw" in pointer_events[0] and pointer_events[0]["x_raw"] is not None and "y_raw" in pointer_events[0] and pointer_events[0]["y_raw"] is not None:
+                dx_px = np.diff(np.array([ev["x_raw"] for ev in pointer_events], dtype=np.float64))
+                dy_px = np.diff(np.array([ev["y_raw"] for ev in pointer_events], dtype=np.float64))
+            else:
+                dx_px = np.diff(x_norm) * vp_w
+                dy_px = np.diff(y_norm) * vp_h
+
+            dt_ms = np.diff(t_arr)
+            dt_ms = np.where(dt_ms <= 0, 1.0, dt_ms)
+
+            distances = np.sqrt(dx_px**2 + dy_px**2)
+            total_traj_len = float(np.sum(distances))
+
+            velocities = distances / dt_ms
+            if len(velocities) > 0:
+                mean_vel = float(np.mean(velocities))
+                max_vel = float(np.max(velocities))
+
+            if len(velocities) >= 2:
+                dt_acc = dt_ms[1:]
+                dt_acc = np.where(dt_acc <= 0, 1.0, dt_acc)
+                accels = np.abs(np.diff(velocities)) / dt_acc
+                mean_accel = float(np.mean(accels))
+
+            if len(dx_px) >= 2:
+                angles = np.arctan2(dy_px, dx_px)
+                angle_diffs = np.abs(np.diff(angles))
+                angle_diffs = np.where(angle_diffs > np.pi, 2 * np.pi - angle_diffs, angle_diffs)
+                hesitation_cnt = float(np.sum(angle_diffs > (np.pi / 4.0)))
+
+                hist, _ = np.histogram(angles, bins=8, range=(-np.pi, np.pi), density=False)
+                hist_sum = hist.sum()
+                if hist_sum > 0:
+                    p = hist[hist > 0] / hist_sum
+                    trajectory_entropy = float(-np.sum(p * np.log2(p)) / 3.0)
+
+    # 4. DOM Target Dwell Extraction (Decoupled from pointer motion)
+    if has_dom_support:
+        def _is_valid_dom_target(t: Any) -> bool:
+            if t is None or isinstance(t, (float, int)):
+                return False
+            t_str = str(t).strip()
+            return bool(t_str and t_str not in ("/", "/html", "nan", "None", "{}"))
+
+        dwell_evs = [
+            ev for ev in events
+            if ev.get("event_type") == "mouseover"
+            or _is_valid_dom_target(ev.get("target_id"))
+            or _is_valid_dom_target(ev.get("xpath"))
+        ]
+        dwell_time_ms = min(float(len(dwell_evs) * 40.0), float(window_duration_ms))
+
+    # 5. Viewport Scroll Extraction
+    if has_scroll_support:
+        scroll_events = [ev for ev in events if ev.get("event_type") in ("scroll", "wheel")]
         scroll_count = len(scroll_events)
         scroll_vel = (scroll_count * 100.0) / max(window_duration_ms, 1.0)
         max_scrollable = max(doc_h - vp_h, 1.0)
@@ -447,7 +473,10 @@ def extract_session_microtensors(
     window_size_ms: int = 500,
     stride_ms: int = 250,
     min_events_per_window: int = 3,
-    has_scroll_support: bool = True
+    has_pointer_support: bool = True,
+    has_dom_support: bool = True,
+    has_scroll_support: bool = True,
+    scales: Optional[Dict[str, float]] = None
 ) -> np.ndarray:
     """
     Segment a canonical event stream into sliding 500ms windows with 250ms stride.
@@ -491,7 +520,10 @@ def extract_session_microtensors(
                 viewport=(vp_w, vp_h),
                 document=(doc_w, doc_h),
                 window_duration_ms=float(window_size_ms),
-                has_scroll_support=has_scroll_support
+                has_pointer_support=has_pointer_support,
+                has_dom_support=has_dom_support,
+                has_scroll_support=has_scroll_support,
+                scales=scales
             )
             windows.append(tensor_18)
 
@@ -505,7 +537,10 @@ def extract_session_microtensors(
 
 def extract_mock_microtensor(
     seq_len: int = 8,
+    has_pointer: bool = True,
+    has_dom: bool = True,
     has_scroll: bool = True,
+    has_scroll_support: Optional[bool] = None,
     random_seed: Optional[int] = 42
 ) -> np.ndarray:
     """
@@ -513,6 +548,9 @@ def extract_mock_microtensor(
     smoke tests, and unit testing.
     Output shape is (seq_len, 18) with all values strictly bounded in [0, 1].
     """
+    if has_scroll_support is not None:
+        has_scroll = has_scroll_support
+
     if random_seed is not None:
         rng = np.random.RandomState(random_seed)
     else:
@@ -530,13 +568,15 @@ def extract_mock_microtensor(
     events: List[Dict[str, Any]] = []
     for i in range(num_events):
         ev_type = "mousemove"
-        if i % 15 == 0:
+        if has_dom and (i % 15 == 0):
             ev_type = "mouseover"
         elif has_scroll and (i % 25 == 0):
             ev_type = "scroll"
 
         x_clamped = max(0.0, min(1422.0, float(x_raw[i])))
         y_clamped = max(0.0, min(1137.0, float(y_raw[i])))
+
+        xpath_val = "//*[@id='target']" if (has_dom and ev_type == "mouseover") else "/"
 
         events.append({
             "timestamp_ms": int(timestamps[i]),
@@ -545,7 +585,7 @@ def extract_mock_microtensor(
             "y_norm": y_clamped / 1137.0,
             "x_raw": x_clamped,
             "y_raw": y_clamped,
-            "xpath": "//*[@id='target']" if ev_type == "mouseover" else "/",
+            "xpath": xpath_val,
             "viewport_w": 1422.0,
             "viewport_h": 1137.0,
             "doc_w": 1403.0,
@@ -557,6 +597,8 @@ def extract_mock_microtensor(
         window_size_ms=500,
         stride_ms=250,
         min_events_per_window=3,
+        has_pointer_support=has_pointer,
+        has_dom_support=has_dom,
         has_scroll_support=has_scroll
     )
 
@@ -568,6 +610,8 @@ def extract_mock_microtensor(
             events[:10],
             viewport=(1422.0, 1137.0),
             document=(1403.0, 2642.0),
+            has_pointer_support=has_pointer,
+            has_dom_support=has_dom,
             has_scroll_support=has_scroll
         )
         return np.repeat(single_window[np.newaxis, :], seq_len, axis=0)

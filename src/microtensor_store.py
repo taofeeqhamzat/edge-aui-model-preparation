@@ -126,7 +126,10 @@ def extract_microtensors_from_canonical(
     table = pq.read_table(str(in_path))
     df = table.to_pandas()
 
-    has_scroll = bool(df["dataset_id"].iloc[0] in ("adserp", "continuous_kinematics"))
+    dataset_id = str(df["dataset_id"].iloc[0]).lower()
+    has_pointer = bool(dataset_id in ("adserp", "continuous_kinematics", "captcha_solve_30k", "video_cua", "target_testbed"))
+    has_dom = bool(dataset_id in ("adserp", "target_testbed"))
+    has_scroll = bool(dataset_id in ("adserp", "continuous_kinematics", "target_testbed"))
 
     # Group by session_id
     writer = pq.ParquetWriter(str(out_path), schema=MICROTENSOR_SCHEMA, compression="snappy")
@@ -170,6 +173,8 @@ def extract_microtensors_from_canonical(
                         viewport=(vp_w, vp_h),
                         document=(doc_w, doc_h),
                         window_duration_ms=float(window_size_ms),
+                        has_pointer_support=has_pointer,
+                        has_dom_support=has_dom,
                         has_scroll_support=has_scroll,
                         scales=scales
                     )
