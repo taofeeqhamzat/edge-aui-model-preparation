@@ -97,13 +97,12 @@ def build_preprocessing_eda_notebook(branch: str = "explore/pipeline/revision/1"
                     "else:\n",
                     "    print('[Environment] Running in local/virtual environment.')\n",
                     "\n",
-                    "# Configure sys.path\n",
-                    "for p in ['src', '../src', './model-preparation/src']:\n",
+                    "# Configure sys.path: add both project root and src/ to support direct and packaged imports\n",
+                    "for p in ['.', '..', 'src', '../src', './model-preparation', './model-preparation/src']:\n",
                     "    abs_p = os.path.abspath(p)\n",
                     "    if os.path.isdir(abs_p) and abs_p not in sys.path:\n",
                     "        sys.path.insert(0, abs_p)\n",
-                    "        print(f'[Path] Added {abs_p} to sys.path')\n",
-                    "        break"
+                    "        print(f'[Path] Added {abs_p} to sys.path')"
                 ]
             },
             {
