@@ -30,24 +30,47 @@ except ImportError:
     pd = None  # type: ignore
     PANDAS_AVAILABLE = False
 
-from src.config import (
-    load_config,
-    PipelineConfig,
-    MICROTENSOR_DIM,
-    NUM_BEHAVIOURAL_FEATURES
-)
-from src.preprocessing import (
-    compute_window_microtensor,
-    FEATURE_COLUMN_NAMES,
-    MASK_COLUMN_NAMES,
-    ALL_MICROTENSOR_COLUMNS,
-    find_project_root
-)
-from src.target_generation import (
-    extract_lookahead_outcome,
-    OUTCOME_TAXONOMY,
-    OUTCOME_NAME_TO_ID
-)
+try:
+    from config import (
+        load_config,
+        PipelineConfig,
+        MICROTENSOR_DIM,
+        NUM_BEHAVIOURAL_FEATURES
+    )
+    from preprocessing import (
+        compute_window_microtensor,
+        FEATURE_COLUMN_NAMES,
+        MASK_COLUMN_NAMES,
+        ALL_MICROTENSOR_COLUMNS,
+        find_project_root
+    )
+    from target_generation import (
+        extract_lookahead_outcome,
+        OUTCOME_TAXONOMY,
+        OUTCOME_NAME_TO_ID
+    )
+except ImportError:
+    # pyrefly: ignore [missing-import]
+    from src.config import (
+        load_config,
+        PipelineConfig,
+        MICROTENSOR_DIM,
+        NUM_BEHAVIOURAL_FEATURES
+    )
+    # pyrefly: ignore [missing-import]
+    from src.preprocessing import (
+        compute_window_microtensor,
+        FEATURE_COLUMN_NAMES,
+        MASK_COLUMN_NAMES,
+        ALL_MICROTENSOR_COLUMNS,
+        find_project_root
+    )
+    # pyrefly: ignore [missing-import]
+    from src.target_generation import (
+        extract_lookahead_outcome,
+        OUTCOME_TAXONOMY,
+        OUTCOME_NAME_TO_ID
+    )
 
 # PyArrow schema for flattened MicroTensor Parquet
 if PYARROW_AVAILABLE:
@@ -185,8 +208,11 @@ def extract_microtensors_from_canonical(
                     i_look_start = int(np.searchsorted(ts_array, lookahead_start, side="left"))
                     i_look_end = int(np.searchsorted(ts_array, lookahead_end, side="left"))
                     future_evs = events_records[i_look_start:i_look_end]
-
-                    label_id, label_name = extract_lookahead_outcome(future_evs)
+                    session_terminated = bool(end_ts <= lookahead_end)
+                    label_id, label_name = extract_lookahead_outcome(
+                        future_evs,
+                        session_terminated=session_terminated
+                    )
 
                     row_dict: Dict[str, Any] = {
                         "dataset_id": dataset_id,

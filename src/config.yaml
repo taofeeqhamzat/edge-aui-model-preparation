@@ -54,12 +54,21 @@ preprocessing:
 target_generation:
   lookahead_horizon_ms: [500, 1500]
   outcome_taxonomy:
-    0: IDLE_ABANDON
+    0: NO_OUTCOME
     1: CLICK
     2: FORM_SUBMIT
     3: BACKTRACK
     4: RAPID_SCROLL
     5: HOVER_DWELL
+    6: ABANDON
+  priority_hierarchy:
+    - FORM_SUBMIT
+    - CLICK
+    - BACKTRACK
+    - RAPID_SCROLL
+    - HOVER_DWELL
+    - ABANDON
+    - NO_OUTCOME
   target_intervention_vocabulary:
     0: simplify_options
     1: highlight_primary_action
@@ -73,7 +82,7 @@ training:
   learning_rate: 0.001
   hidden_dim: 64
   num_layers: 2
-  foundation_classes: 6
+  foundation_classes: 7
   target_classes: 5
   device: "auto" # "auto", "cuda", "mps", "cpu"
 

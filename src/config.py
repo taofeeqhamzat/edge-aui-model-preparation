@@ -60,17 +60,30 @@ class PreprocessingConfig:
     normalization: NormalizationConfig = field(default_factory=NormalizationConfig)
 
 
+DEFAULT_PRIORITY_HIERARCHY: List[str] = [
+    "FORM_SUBMIT",
+    "CLICK",
+    "BACKTRACK",
+    "RAPID_SCROLL",
+    "HOVER_DWELL",
+    "ABANDON",
+    "NO_OUTCOME"
+]
+
+
 @dataclass
 class TargetGenerationConfig:
     lookahead_horizon_ms: Tuple[int, int] = (500, 1500)
     outcome_taxonomy: Dict[int, str] = field(default_factory=lambda: {
-        0: "IDLE_ABANDON",
+        0: "NO_OUTCOME",
         1: "CLICK",
         2: "FORM_SUBMIT",
         3: "BACKTRACK",
         4: "RAPID_SCROLL",
-        5: "HOVER_DWELL"
+        5: "HOVER_DWELL",
+        6: "ABANDON"
     })
+    priority_hierarchy: List[str] = field(default_factory=lambda: list(DEFAULT_PRIORITY_HIERARCHY))
     target_intervention_vocabulary: Dict[int, str] = field(default_factory=lambda: {
         0: "simplify_options",
         1: "highlight_primary_action",
@@ -87,7 +100,7 @@ class TrainingConfig:
     learning_rate: float = 0.001
     hidden_dim: int = 64
     num_layers: int = 2
-    foundation_classes: int = 6
+    foundation_classes: int = 7
     target_classes: int = 5
     device: str = "auto"
 
@@ -275,6 +288,8 @@ def load_config(
         learning_rate=overrides.get("lr", train_dict.get("learning_rate", 0.001)),
         hidden_dim=overrides.get("hidden_dim", train_dict.get("hidden_dim", 64)),
         num_layers=overrides.get("num_layers", train_dict.get("num_layers", 2)),
+        foundation_classes=overrides.get("foundation_classes", train_dict.get("foundation_classes", 7)),
+        target_classes=overrides.get("target_classes", train_dict.get("target_classes", 5)),
         device=overrides.get("device", train_dict.get("device", "auto"))
     )
 
@@ -287,11 +302,33 @@ def load_config(
         target_latency_ms=export_dict.get("target_latency_ms", 50.0)
     )
 
+    target_dict = raw_dict.get("target_generation", {})
+    target_cfg = TargetGenerationConfig(
+        lookahead_horizon_ms=tuple(target_dict.get("lookahead_horizon_ms", (500, 1500))),
+        outcome_taxonomy=target_dict.get("outcome_taxonomy", {
+            0: "NO_OUTCOME",
+            1: "CLICK",
+            2: "FORM_SUBMIT",
+            3: "BACKTRACK",
+            4: "RAPID_SCROLL",
+            5: "HOVER_DWELL",
+            6: "ABANDON"
+        }),
+        priority_hierarchy=target_dict.get("priority_hierarchy", list(DEFAULT_PRIORITY_HIERARCHY)),
+        target_intervention_vocabulary=target_dict.get("target_intervention_vocabulary", {
+            0: "simplify_options",
+            1: "highlight_primary_action",
+            2: "offer_assistance",
+            3: "expand_tooltip",
+            4: "no_op"
+        })
+    )
+
     pipeline_cfg = PipelineConfig(
         mode=selected_mode,
         data=data_cfg,
         preprocessing=prep_cfg,
-        target_generation=TargetGenerationConfig(),
+        target_generation=target_cfg,
         training=train_cfg,
         ablation=AblationConfig(),
         export=export_cfg
