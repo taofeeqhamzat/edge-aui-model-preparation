@@ -4,10 +4,16 @@ This directory contains empirical experiment logs, diagnostic visual plots, and 
 
 ## Experiment Index
 
-- **[Experiment 1: Behavioural Feature Normalization and Modality Masking](file:///Users/user/Workspace/MivaCS/FYP/model-preparation/experiments/1/README.md)**  
+- **[Experiment Documentation Specification](skeleton.md)**  
+  Format standards, metadata schema, and style constraints for repository experiment logs.
+
+- **[Experiment 0: Template / Staged Experiment](0/README.md)**  
+  Staged reference template for upcoming experiments adhering to the documentation specification.
+
+- **[Experiment 1: Behavioural Feature Normalization and Modality Masking](1/README.md)**  
   Resolves feature ceiling saturation and establishes sensor capability masking (ADR-001).
-  - Diagnostic baseline plots: [`experiments/1/before/`](file:///Users/user/Workspace/MivaCS/FYP/model-preparation/experiments/1/before/)
-  - Diagnostic post-correction plots: [`experiments/1/after/`](file:///Users/user/Workspace/MivaCS/FYP/model-preparation/experiments/1/after/)
+  - Diagnostic baseline plots: [`1/before/`](1/before/)
+  - Diagnostic post-correction plots: [`1/after/`](1/after/)
 
 ## Directory Structure
 
