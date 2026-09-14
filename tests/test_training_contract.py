@@ -22,12 +22,12 @@ class TestTrainingContract(unittest.TestCase):
     def test_model_input_dimension_is_18(self):
         """Ensure EdgeAUIGRU accepts (batch, seq_len, 18) inputs without dimension mismatch."""
         self.assertEqual(MICROTENSOR_DIM, 18)
-        model = EdgeAUIGRU(input_dim=MICROTENSOR_DIM, hidden_dim=32, num_layers=2, num_classes=6)
+        model = EdgeAUIGRU(input_dim=MICROTENSOR_DIM, hidden_dim=32, num_layers=2, num_classes=7)
         
         # Forward pass with 18-D input
         dummy_x = torch.randn(4, 8, 18)
         out = model(dummy_x)
-        self.assertEqual(out.shape, (4, 6))
+        self.assertEqual(out.shape, (4, 7))
 
     def test_load_foundation_dataset_contract(self):
         """Verify load_foundation_dataset produces 18-D tensors and valid outcome targets."""

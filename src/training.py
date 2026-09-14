@@ -6,7 +6,7 @@ Foundational PyTorch training loop for the GRU model (Edge-AUI Framework).
 import os
 import sys
 import argparse
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Union, Tuple
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -34,9 +34,9 @@ DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".data"
 BATCH_SIZE = 64
 EPOCHS = 5
 LEARNING_RATE = 1e-3
-HIDDEN_DIM = 32
+HIDDEN_DIM = 64
 NUM_LAYERS = 2
-NUM_CLASSES = 6  # IDLE, CLICK, FORM_SUBMIT, BACKTRACK, RAPID_SCROLL, HOVER_DWELL
+NUM_CLASSES = 7  # NO_OUTCOME, CLICK, FORM_SUBMIT, BACKTRACK, RAPID_SCROLL, HOVER_DWELL, ABANDON
 
 
 def get_device(device_override: Optional[str] = None) -> torch.device:
@@ -53,20 +53,125 @@ def get_device(device_override: Optional[str] = None) -> torch.device:
     return torch.device("cpu")
 
 
+class FoundationOutcomeHead(nn.Module):
+    """
+    Modular classification head mapping latent behavioral representation h_T in R^64
+    to the 7 foundational outcome classes (ADR-002, ADR-003).
+    """
+    def __init__(self, hidden_dim: int = 64, num_classes: int = 7):
+        super(FoundationOutcomeHead, self).__init__()
+        self.fc = nn.Linear(hidden_dim, num_classes)
+
+    def forward(self, h_T: torch.Tensor) -> torch.Tensor:
+        return self.fc(h_T)
+
+
+class TargetInterventionHead(nn.Module):
+    """
+    Modular projection head mapping latent behavioral representation h_T in R^64
+    to the 5 target UI intervention actions (ADR-003).
+    Intervention classes represent system adaptation decisions rather than user actions.
+    Interface established in Task 4.1; training deferred to Task 4.2.
+    """
+    def __init__(self, hidden_dim: int = 64, num_classes: int = 5):
+        super(TargetInterventionHead, self).__init__()
+        self.fc = nn.Linear(hidden_dim, num_classes)
+
+    def forward(self, h_T: torch.Tensor) -> torch.Tensor:
+        return self.fc(h_T)
+
+
 class EdgeAUIGRU(nn.Module):
     """
-    Lightweight GRU for edge inference. 
-    The base layers encode kinematics (foundational priors) and structural patterns.
+    Decoupled lightweight Gated Recurrent Unit (GRU) for edge inference (ADR-003).
+    The recurrent backbone encodes kinematics and temporal dynamics into an
+    interface-agnostic latent representation h_T in R^64, solving target Out-of-Vocabulary (OOV).
+    Modular classification heads project h_T onto task-specific vocabularies.
     """
-    def __init__(self, input_dim: int, hidden_dim: int, num_layers: int, num_classes: int):
+    def __init__(
+        self,
+        input_dim: int = MICROTENSOR_DIM,
+        hidden_dim: int = 64,
+        num_layers: int = 2,
+        num_classes: int = 7,
+        head: Optional[nn.Module] = None
+    ):
         super(EdgeAUIGRU, self).__init__()
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        self.num_classes = num_classes
+
+        # Recurrent GRU backbone (theta_base)
         self.gru = nn.GRU(input_dim, hidden_dim, num_layers, batch_first=True)
-        self.fc = nn.Linear(hidden_dim, num_classes)
-        
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+
+        # Modular classification head (theta_head)
+        if head is not None:
+            self.head = head
+        else:
+            self.head = FoundationOutcomeHead(hidden_dim, num_classes)
+
+    @property
+    def fc(self) -> nn.Module:
+        """Backward-compatibility accessor for existing self.fc references."""
+        if hasattr(self.head, "fc"):
+            return self.head.fc
+        return self.head
+
+    def attach_head(self, head: nn.Module) -> None:
+        """
+        Replace the modular classification head without reconstructing the GRU backbone.
+        """
+        self.head = head
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        return_latent: bool = False
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+        """
+        Forward pass through recurrent backbone and active modular head.
+        Extracts terminal recurrent representation h_T = out[:, -1, :].
+        (For a unidirectional GRU, the final timestep output is mathematically
+        equivalent to the final layer hidden state h_n[-1]).
+        """
         out, _ = self.gru(x)
-        out = out[:, -1, :]
-        return self.fc(out)
+        # Latent behavioral representation h_T in R^(batch_size, hidden_dim)
+        h_T = out[:, -1, :]
+        logits = self.head(h_T)
+
+        if return_latent:
+            return logits, h_T
+        return logits
+
+    def backbone_parameters(self):
+        """Return parameters of the recurrent GRU backbone (theta_base)."""
+        return self.gru.parameters()
+
+    def head_parameters(self):
+        """Return parameters of the modular classification head (theta_head)."""
+        return self.head.parameters()
+
+    def freeze_backbone(self) -> None:
+        """Freeze all recurrent backbone parameters (Strict Freezing)."""
+        for p in self.gru.parameters():
+            p.requires_grad = False
+
+    def unfreeze_backbone(self) -> None:
+        """Unfreeze all recurrent backbone parameters (Full Fine-Tuning)."""
+        for p in self.gru.parameters():
+            p.requires_grad = True
+
+    def unfreeze_terminal_layer(self) -> None:
+        """
+        Freeze lower GRU layers and unfreeze exclusively the terminal GRU layer (Partial Fine-Tuning).
+        """
+        terminal_layer_idx = self.num_layers - 1
+        for name, p in self.gru.named_parameters():
+            if f"_l{terminal_layer_idx}" in name:
+                p.requires_grad = True
+            else:
+                p.requires_grad = False
 
 
 def load_foundation_dataset(
@@ -89,12 +194,24 @@ def load_foundation_dataset(
     if not interim_micro.is_file():
         canon_path = root / ".data" / "canonical" / "adserp" / "data.parquet"
         if not canon_path.is_file():
-            from src.data import convert_adserp_to_canonical
+            try:
+                from data import convert_adserp_to_canonical
+            except ImportError:
+                # pyrefly: ignore [missing-import]
+                from src.data import convert_adserp_to_canonical
             convert_adserp_to_canonical()
-        from src.microtensor_store import extract_microtensors_from_canonical
+        try:
+            from microtensor_store import extract_microtensors_from_canonical
+        except ImportError:
+            # pyrefly: ignore [missing-import]
+            from src.microtensor_store import extract_microtensors_from_canonical
         extract_microtensors_from_canonical(str(canon_path), str(interim_micro))
 
-    from src.microtensor_store import split_users_leak_free, reconstruct_sequences_from_parquet
+    try:
+        from microtensor_store import split_users_leak_free, reconstruct_sequences_from_parquet
+    except ImportError:
+        # pyrefly: ignore [missing-import]
+        from src.microtensor_store import split_users_leak_free, reconstruct_sequences_from_parquet
     train_u, val_u, test_u = split_users_leak_free(str(interim_micro), train_ratio=train_ratio, val_ratio=val_ratio, random_seed=random_seed)
 
     target_users = train_u if split == "train" else (val_u if split == "val" else test_u)
@@ -120,6 +237,7 @@ def train_foundation_model(
     max_files_per_dataset: Optional[int] = None,
     device: Optional[str] = None,
     output_dir: Optional[str] = None,
+    class_weights: Optional[torch.Tensor] = None,
     verbose: bool = True
 ) -> Dict[str, Any]:
     """
@@ -152,7 +270,10 @@ def train_foundation_model(
         num_classes=NUM_CLASSES
     ).to(target_device)
     
-    criterion = nn.CrossEntropyLoss()
+    if class_weights is not None:
+        criterion = nn.CrossEntropyLoss(weight=class_weights.to(target_device))
+    else:
+        criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
     
     history: Dict[str, List[float]] = {"loss": [], "accuracy": []}
