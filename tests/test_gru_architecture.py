@@ -47,16 +47,25 @@ class TestGRUArchitecture(unittest.TestCase):
         out1 = model(x)
         self.assertEqual(out1.shape, (2, 7))
 
-        # Attach 5-class TargetInterventionHead
-        intervention_head = TargetInterventionHead(hidden_dim=64, num_classes=5)
-        model.attach_head(intervention_head)
+        # Attach 5-class TargetInterventionHead (UI context vector is mandatory)
+        context_head = TargetInterventionHead(hidden_dim=64, context_dim=6, num_classes=5)
+        model.attach_head(context_head)
+        ctx = torch.randn(2, 6)
 
-        out2 = model(x)
+        out2 = model(x, context=ctx)
         self.assertEqual(out2.shape, (2, 5))
 
         # Latent representation h_T remains identical for identical inputs
-        _, h_T = model(x, return_latent=True)
+        _, h_T = model(x, context=ctx, return_latent=True)
         self.assertEqual(h_T.shape, (2, 64))
+
+        # Verify missing context raises ValueError
+        with self.assertRaises(ValueError):
+            model(x)
+
+        # Verify invalid context_dim <= 0 raises ValueError
+        with self.assertRaises(ValueError):
+            TargetInterventionHead(hidden_dim=64, context_dim=0, num_classes=5)
 
     def test_backbone_and_head_parameter_isolation(self):
         """Verify clean separation of parameters between theta_base and theta_head."""

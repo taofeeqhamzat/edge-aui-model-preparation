@@ -86,16 +86,31 @@ class FoundationOutcomeHead(nn.Module):
 class TargetInterventionHead(nn.Module):
     """
     Modular projection head mapping latent behavioral representation h_T in R^64
-    to the 5 target UI intervention actions (ADR-003).
+    and mandatory target UI context vector C in R^C_dim to the 5 target UI intervention actions (ADR-003).
+    Conditioned as [h_T, C] -> 5 actions via MLP. Context vector C is strictly mandatory.
     Intervention classes represent system adaptation decisions rather than user actions.
-    Interface established in Task 4.1; training deferred to Task 4.2.
+    Interface updated in Task 4.2; training deferred to Phase 5.
     """
-    def __init__(self, hidden_dim: int = 64, num_classes: int = 5):
+    def __init__(self, hidden_dim: int = 64, context_dim: int = 6, num_classes: int = 5):
         super(TargetInterventionHead, self).__init__()
-        self.fc = nn.Linear(hidden_dim, num_classes)
+        if context_dim <= 0:
+            raise ValueError(f"context_dim must be positive, got {context_dim}. UI context vector is mandatory.")
+        self.hidden_dim = hidden_dim
+        self.context_dim = context_dim
+        self.num_classes = num_classes
+        in_features = hidden_dim + context_dim
+        self.fc = nn.Sequential(
+            nn.Linear(in_features, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, num_classes)
+        )
 
-    def forward(self, h_T: torch.Tensor) -> torch.Tensor:
-        return self.fc(h_T)
+    def forward(self, h_T: torch.Tensor, context: torch.Tensor) -> torch.Tensor:
+        """Forward pass requiring both latent state h_T and UI context tensor."""
+        if context is None:
+            raise ValueError("UI context tensor is mandatory for TargetInterventionHead.")
+        features = torch.cat([h_T, context], dim=-1)
+        return self.fc(features)
 
 
 class EdgeAUIGRU(nn.Module):
@@ -144,6 +159,7 @@ class EdgeAUIGRU(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
+        context: Optional[torch.Tensor] = None,
         return_latent: bool = False
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         """
@@ -155,7 +171,14 @@ class EdgeAUIGRU(nn.Module):
         out, _ = self.gru(x)
         # Latent behavioral representation h_T in R^(batch_size, hidden_dim)
         h_T = out[:, -1, :]
-        logits = self.head(h_T)
+        if isinstance(self.head, TargetInterventionHead):
+            if context is None:
+                raise ValueError("UI context tensor is mandatory when using TargetInterventionHead.")
+            logits = self.head(h_T, context=context)
+        elif context is not None:
+            logits = self.head(h_T, context=context)
+        else:
+            logits = self.head(h_T)
 
         if return_latent:
             return logits, h_T
