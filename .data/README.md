@@ -1,8 +1,8 @@
 ---
-license: "cc-by-4.0"
+license: cc-by-4.0
 task_categories:
   - tabular-classification
-  - other
+  - time-series-forecasting
 tags:
   - time-series-classification
   - sequence-modeling
@@ -14,20 +14,58 @@ tags:
 
 # Dataset Card: Edge-Native Adaptive UI Behavioral Logs
 
-## Dataset Provenance and Attribution
+## 1. Dataset Provenance and Attribution
 
-This dataset aggregates multiple open-source behavioral logs to support the project: **IMPLEMENTING A LIGHTWEIGHT AI-ASSISTED FRAMEWORK FOR BEHAVIOURAL PATTERN EXTRACTION AND ADAPTIVE UI RECOMMENDATIONS ON THE WEB**. 
+This repository stores aggregated behavioral interaction logs. The dataset supports research on edge-native adaptive user interfaces.
 
-The dataset integrates the following public research datasets, all of which are properly cited and attributed to their original authors:
+The repository includes five public research datasets:
 
-* **Client-Side Action Paths:** Ou, C., Buschek, D., Eiband, M., & Butz, A. (2021). *This dataset provides granular client-side action paths necessary for modeling sequential user intent.*
-* **Structured Human-Machine Interaction Logs:** Carrera-Rivera et al. (2023). *This dataset provides logs of structured interactions to help identify frequent macro-interactions and high-level behavioral patterns.*
-* **Continuous Kinematics:** Leiva, L. A., & Arapakis, I. (2020). *Provides continuous cursor kinematics and physical movement features to understand low-level motor behaviors.*
-* **High-Volume Trajectories:** Mendeley Mouse Dynamics (2026). *Provides high-volume cursor trajectory data for robust training of continuous behavioral sequences.*
+- **Client-Side Action Paths:** Ou et al. (2021). Granular client-side action paths to model sequential user interactions.
+- **Structured Human-Machine Interaction Logs:** Carrera-Rivera et al. (2023). Interaction logs to identify macro-interactions and sequential behavioral patterns.
+- **Continuous Kinematics:** Leiva and Arapakis (2020). Continuous cursor coordinates and kinematic metrics to record motor dynamics.
+- **High-Volume Trajectories:** Mendeley Mouse Dynamics (2026). Continuous cursor trajectory sequences across heterogeneous tasks.
+- **AdSERP Search and Interaction Logs:** Arapakis et al. (2025). Search engine result page interactions with cursor coordinates, fixations, and DOM elements.
 
-## Multi-Tiered Transfer Learning Strategy
+## 2. Multi-Tiered Transfer Learning Strategy
 
-These datasets are specifically structured to support our multi-tiered transfer learning strategy for training a lightweight Gated Recurrent Unit (GRU):
+The datasets support a two-stage training strategy for a lightweight Gated Recurrent Unit (GRU):
 
-1. **Foundational Pre-training:** The model first learns cross-domain human motor behaviors (kinematic features) using the large-scale public datasets (e.g., Continuous Kinematics by Leiva & Arapakis, and High-Volume Trajectories from Mendeley). This phase allows the foundational recurrent layers of the GRU to understand the underlying physics and biomechanics of human cursor movement, independent of any specific user interface.
-2. **Target UI Fine-tuning:** The model's classification head is then fine-tuned on localized logs from a target testbed (such as a Security Operations Center dashboard). By combining the pre-trained kinematic understanding with specific structured interactions (like the Client-Side Action Paths and Human-Machine Interaction Logs), the model can accurately map physical movements to specific, localized UI outcomes. This step resolves the Out-of-Vocabulary (OOV) target action problem caused by domain mismatch.
+1. **Foundational Pre-Training:** The model learns cross-domain human motor behaviors from continuous kinematic streams. The recurrent layers model trajectory physics and temporal decay without interface-specific geometry.
+2. **Target UI Fine-Tuning:** The system freezes the recurrent layers. The classification head trains on localized logs from the target application to map motor representations to downstream actions.
+
+## 3. MicroTensor Feature Schema
+
+The pipeline segments continuous pointer and scroll streams into 500 ms windows with a 250 ms stride. Each window outputs an 18-dimensional vector. The vector contains 9 kinematic features and 9 modality capability masks (ADR-001):
+
+| Index | Field | Dimension Type | Unit / Range | Description |
+|---|---|---|---|---|
+| 0 | `mean_velocity` | Continuous | $px/ms$ | Mean Euclidean velocity |
+| 1 | `max_velocity` | Continuous | $px/ms$ | Peak Euclidean velocity |
+| 2 | `mean_acceleration` | Continuous | $px/ms^2$ | Mean Euclidean acceleration |
+| 3 | `hesitation_count` | Discrete count | $\ge 0$ | Direction changes with angle $\theta > 45^\circ$ |
+| 4 | `total_trajectory_length` | Continuous | $px$ | Accumulated Euclidean path length |
+| 5 | `dwell_time_ms` | Continuous | $ms$ | Cumulative dwell time on interactive DOM targets |
+| 6 | `trajectory_entropy` | Continuous | $[0.0, 1.0]$ | Spatial path efficiency |
+| 7 | `scroll_depth_percentage` | Continuous | $[0.0, 1.0]$ | Viewport vertical scroll position |
+| 8 | `scroll_velocity` | Continuous | $px/ms$ | Rate of vertical scroll displacement |
+| 9-17 | `mask_*` | Binary flag | $\{0, 1\}$ | Modality capability indicator |
+
+Binary masks record feature availability per dataset. The model avoids zero-imputation artifacts when a dataset lacks scroll or DOM telemetry.
+
+## 4. Downstream Target Outcome Taxonomy
+
+The self-supervised pipeline pairs each window with downstream interface outcomes in an adjacent lookahead horizon of 500 ms to 1500 ms (ADR-002):
+
+- **Class 0 (`NO_OUTCOME`):** Inactivity or reading without a qualifying macro-interaction.
+- **Class 1 (`CLICK`):** Pointer click on an interactive element.
+- **Class 2 (`FORM_SUBMIT`):** Form submission action.
+- **Class 3 (`BACKTRACK`):** Fast direction reversal or return navigation.
+- **Class 4 (`RAPID_SCROLL`):** Fast scroll burst.
+- **Class 5 (`HOVER_DWELL`):** Cursor pause over an interactive element.
+- **Class 6 (`ABANDON`):** Observable window or session termination (`beforeunload`, `pagehide`, `unload`).
+
+## 5. Partitioning and Leakage Prevention
+
+The pipeline splits data by unique `user_id`. The pipeline falls back to `session_id` only when reliable user identifiers are missing.
+
+Sequence windows reconstruct strictly within assigned split partitions. No sequence window spans multiple users or sessions.
