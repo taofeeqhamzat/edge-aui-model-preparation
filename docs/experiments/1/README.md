@@ -22,7 +22,7 @@
 ## 2. Plan
 
 - Audit unclipped metric percentiles across 13,846 AdSERP sliding windows. Identify empirical distributions across all nine continuous behavioural features.
-- Differentiate natural behavioural zeros from artificial ceiling clipping. Validate zero-velocity scroll and direct cursor movements.
+- Differentiate natural behavioural zeros from artificial ceiling clipping. Verify zero-velocity scroll and direct cursor movements.
 - Calibrate static normalization constants for acceleration and hesitation. Target active ceiling saturation rates below two percent.
 - Formalize capability masking under ADR-001 to resolve modality asymmetry. Decouple physical user stillness from absent sensor hardware.
 - Partition input modalities into pointer, DOM, and scroll capability channels. Ensure hover dwell operates independently from cursor movement.
@@ -58,9 +58,9 @@
 
 - Active acceleration ceiling saturation dropped from 24.36 percent to 1.34 percent. This represents an eleven-fold reduction in ceiling truncation.
 - Active hesitation ceiling saturation dropped from 14.71 percent to 1.22 percent. Calibrated scales successfully capture real pointer jitter variance.
-- The audit confirmed legitimate natural zeros across inactive intervals. Scroll velocity displays 58.20 percent natural zeros during non-scrolling reading periods.
+- The audit verified legitimate natural zeros across inactive intervals. Scroll velocity displays 58.20 percent natural zeros during non-scrolling reading periods.
 - Hesitation count displays 29.20 percent natural zeros during direct cursor movements. Trajectory entropy displays 17.80 percent natural zeros during straight paths.
 - Pointer masks remain at 1.0000 across all 112,865 extracted AdSERP windows. Capability masking successfully decouples sensor hardware presence from physical user stillness.
-- Attentional hover dwell now records stationary focus without being cleared to zero. Neural projection layers compute distinct parameter offsets for resting users.
+- Attentional hover dwell now records stationary focus and does not reset to zero. Neural projection layers compute distinct parameter offsets for resting users.
 - The automated test suite executed with zero failures across all 22 unit tests.
-- Baseline diagnostic plots are preserved in [`1/before/`](1/before/). Corrected diagnostic plots are preserved in [`1/after/`](1/after/).
+- Directory [`1/before/`](1/before/) contains baseline diagnostic plots. Directory [`1/after/`](1/after/) contains corrected diagnostic plots.

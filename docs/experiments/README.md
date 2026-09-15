@@ -15,6 +15,11 @@ This directory contains empirical experiment logs, diagnostic visual plots, and 
   - Diagnostic baseline plots: [`1/before/`](1/before/)
   - Diagnostic post-correction plots: [`1/after/`](1/after/)
 
+- **[Experiment 2: Methodological Audit of Target Generation, Leak-Free Splitting, and GRU Architecture](2/README.md)**  
+  Verifies training readiness across Tasks 3.1, 3.2, and 4.1. Resolves 10 pipeline issues (ADR-002, ADR-003).
+  - Pre-audit issue state: [`2/before/`](2/before/)
+  - Post-audit diagnostic plots: [`2/after/`](2/after/)
+
 ## Directory Structure
 
 Each numbered experiment directory contains:
