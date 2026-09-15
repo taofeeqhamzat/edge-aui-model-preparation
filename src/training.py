@@ -27,7 +27,24 @@ except ImportError:
     except ImportError:
         find_project_root = lambda: os.getcwd()
         is_colab = lambda: False
-        is_kaggle = lambda: False
+try:
+    from target_generation import (
+        compute_class_weights,
+        compute_class_weight_diagnostics,
+        OUTCOME_TAXONOMY
+    )
+except ImportError:
+    try:
+        # pyrefly: ignore [missing-import]
+        from src.target_generation import (
+            compute_class_weights,
+            compute_class_weight_diagnostics,
+            OUTCOME_TAXONOMY
+        )
+    except ImportError:
+        compute_class_weights = None  # type: ignore
+        compute_class_weight_diagnostics = None  # type: ignore
+        OUTCOME_TAXONOMY = {}
 
 # Default Configuration
 DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".data", "raw"))
@@ -180,11 +197,12 @@ def load_foundation_dataset(
     split: str = "train",
     train_ratio: float = 0.70,
     val_ratio: float = 0.15,
-    random_seed: int = 42
+    random_seed: int = 42,
+    enforce_temporal_continuity: bool = False
 ) -> MicroInteractionSequenceDataset:
     """
     Load model-ready (N, 8, 18) sequence tensors from flattened Parquet storage,
-    enforcing leak-free user splitting and deterministic temporal ordering.
+    enforcing leak-free user/session splitting BEFORE sequence construction.
     """
     from pathlib import Path
     root = Path(find_project_root())
@@ -208,20 +226,103 @@ def load_foundation_dataset(
         extract_microtensors_from_canonical(str(canon_path), str(interim_micro))
 
     try:
-        from microtensor_store import split_users_leak_free, reconstruct_sequences_from_parquet
+        from microtensor_store import split_users_leak_free, reconstruct_sequences_from_parquet, SplitResult
     except ImportError:
         # pyrefly: ignore [missing-import]
-        from src.microtensor_store import split_users_leak_free, reconstruct_sequences_from_parquet
-    train_u, val_u, test_u = split_users_leak_free(str(interim_micro), train_ratio=train_ratio, val_ratio=val_ratio, random_seed=random_seed)
+        from src.microtensor_store import split_users_leak_free, reconstruct_sequences_from_parquet, SplitResult
 
-    target_users = train_u if split == "train" else (val_u if split == "val" else test_u)
-    X, Y = reconstruct_sequences_from_parquet(str(interim_micro), seq_len=8, filter_users=target_users)
+    split_res = split_users_leak_free(
+        str(interim_micro),
+        train_ratio=train_ratio,
+        val_ratio=val_ratio,
+        random_seed=random_seed
+    )
+
+    X, Y = reconstruct_sequences_from_parquet(
+        str(interim_micro),
+        seq_len=8,
+        split_result=split_res,
+        split_partition=split,
+        enforce_temporal_continuity=enforce_temporal_continuity
+    )
 
     if max_sequences and len(X) > max_sequences:
         X = X[:max_sequences]
         Y = Y[:max_sequences]
 
     return MicroInteractionSequenceDataset(X, Y)
+
+
+def evaluate_majority_baseline(
+    train_dataset: MicroInteractionSequenceDataset,
+    eval_dataset: MicroInteractionSequenceDataset,
+    num_classes: int = NUM_CLASSES
+) -> Dict[str, Any]:
+    """
+    Evaluate a majority-class baseline on the evaluation partition.
+    Yields baseline accuracy, Macro-F1, Weighted-F1, and per-class metrics.
+    Accuracy alone is deeply misleading on imbalanced distributions; Macro-F1 reveals
+    the failure of a trivial majority predictor on minority classes.
+    """
+    import numpy as np
+
+    if hasattr(train_dataset, "Y"):
+        train_y = train_dataset.Y.numpy() if hasattr(train_dataset.Y, "numpy") else np.asarray(train_dataset.Y)
+    else:
+        train_y = train_dataset.numpy() if hasattr(train_dataset, "numpy") else np.asarray(train_dataset)
+
+    if hasattr(eval_dataset, "Y"):
+        eval_y = eval_dataset.Y.numpy() if hasattr(eval_dataset.Y, "numpy") else np.asarray(eval_dataset.Y)
+    else:
+        eval_y = eval_dataset.numpy() if hasattr(eval_dataset, "numpy") else np.asarray(eval_dataset)
+
+    # Determine majority class from training data only
+    train_counts = np.bincount(train_y, minlength=num_classes)
+    majority_class = int(np.argmax(train_counts))
+    majority_name = OUTCOME_TAXONOMY.get(majority_class, str(majority_class))
+
+    eval_n = len(eval_y)
+    if eval_n == 0:
+        return {"accuracy": 0.0, "macro_f1": 0.0, "weighted_f1": 0.0}
+
+    eval_counts = np.bincount(eval_y, minlength=num_classes)
+    correct = int(eval_counts[majority_class])
+    acc = float(correct / eval_n)
+
+    per_class_f1 = {}
+    f1_list = []
+    weighted_f1_sum = 0.0
+
+    for c in range(num_classes):
+        c_name = OUTCOME_TAXONOMY.get(c, str(c))
+        support = int(eval_counts[c])
+        if c == majority_class:
+            tp = support
+            fp = eval_n - support
+            fn = 0
+            prec = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+            rec = 1.0 if support > 0 else 0.0
+            f1 = (2 * prec * rec / (prec + rec)) if (prec + rec) > 0 else 0.0
+        else:
+            f1 = 0.0
+
+        per_class_f1[c_name] = float(f1)
+        if support > 0:
+            f1_list.append(f1)
+            weighted_f1_sum += f1 * support
+
+    macro_f1 = float(np.mean(f1_list)) if f1_list else 0.0
+    weighted_f1 = float(weighted_f1_sum / eval_n) if eval_n > 0 else 0.0
+
+    return {
+        "majority_class_id": majority_class,
+        "majority_class_name": majority_name,
+        "accuracy": acc,
+        "macro_f1": macro_f1,
+        "weighted_f1": weighted_f1,
+        "per_class_f1": per_class_f1,
+        "support": {OUTCOME_TAXONOMY.get(c, str(c)): int(eval_counts[c]) for c in range(num_classes)}
+    }
 
 
 def train_foundation_model(
@@ -237,19 +338,23 @@ def train_foundation_model(
     max_files_per_dataset: Optional[int] = None,
     device: Optional[str] = None,
     output_dir: Optional[str] = None,
-    class_weights: Optional[torch.Tensor] = None,
+    class_weights: Optional[Union[torch.Tensor, str]] = None,
     verbose: bool = True
 ) -> Dict[str, Any]:
     """
     Foundational training loop for EdgeAUIGRU.
     Supports local datasets as well as automatic hosted synchronization from Hugging Face Hub.
+
+    Methodological Invariant:
+    If class_weights is 'inverse' or 'smoothed', weights are calculated strictly from the
+    training partition dataset.Y (never from global or validation targets).
     """
     target_data_dir = data_dir if data_dir is not None else DATA_DIR
     target_device = get_device(device)
 
     if verbose:
         print(f"[Training] Target execution device: {target_device}")
-        print(f"[Training] Loading interaction sequences from Parquet storage...")
+        print(f"[Training] Loading interaction sequences from Parquet storage (train split)...")
 
     dataset = load_foundation_dataset(
         data_dir=target_data_dir,
@@ -260,7 +365,46 @@ def train_foundation_model(
     if len(dataset) == 0:
         print(f"[Training] Warning: No valid sequences found in {target_data_dir}. Ensure data is populated.")
         return {"model": None, "history": {"loss": [], "accuracy": []}}
-        
+
+    # Resolve class weights strictly on training partition targets
+    weights_tensor: Optional[torch.Tensor] = None
+    weight_diagnostics: Optional[Dict[str, Any]] = None
+
+    if isinstance(class_weights, str):
+        if compute_class_weights is not None:
+            alpha = 100.0 if class_weights == "smoothed" else 0.0
+            weights_tensor = compute_class_weights(
+                dataset.Y,
+                num_classes=NUM_CLASSES,
+                smoothing_alpha=alpha,
+                allow_empty=True
+            )
+            if compute_class_weight_diagnostics is not None:
+                weight_diagnostics = compute_class_weight_diagnostics(
+                    dataset.Y,
+                    num_classes=NUM_CLASSES,
+                    smoothing_alpha=alpha,
+                    allow_empty=True
+                )
+        else:
+            raise RuntimeError("compute_class_weights not available.")
+    elif isinstance(class_weights, torch.Tensor):
+        weights_tensor = class_weights
+        if compute_class_weight_diagnostics is not None:
+            weight_diagnostics = compute_class_weight_diagnostics(
+                dataset.Y,
+                num_classes=NUM_CLASSES,
+                allow_empty=True
+            )
+
+    if verbose and weight_diagnostics is not None:
+        print(f"[Training] Training Partition Class Weight Diagnostics:")
+        print(f" - Max weight: {weight_diagnostics['max_weight']:.4f}")
+        print(f" - Min nonzero weight: {weight_diagnostics['min_nonzero_weight']:.4f}")
+        print(f" - Max/Min nonzero ratio: {weight_diagnostics['max_min_nonzero_ratio']:.2f}")
+        if weight_diagnostics['max_min_nonzero_ratio'] > 1000.0:
+            print(f" [ALERT] Severe class imbalance: max/min weight ratio is {weight_diagnostics['max_min_nonzero_ratio']:.1f}x. Monitor training stability.")
+
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     
     model = EdgeAUIGRU(
@@ -270,8 +414,8 @@ def train_foundation_model(
         num_classes=NUM_CLASSES
     ).to(target_device)
     
-    if class_weights is not None:
-        criterion = nn.CrossEntropyLoss(weight=class_weights.to(target_device))
+    if weights_tensor is not None:
+        criterion = nn.CrossEntropyLoss(weight=weights_tensor.to(target_device))
     else:
         criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
@@ -331,7 +475,9 @@ def train_foundation_model(
         "model_path": model_path,
         "history": history,
         "dataset_size": len(dataset),
-        "device": str(target_device)
+        "device": str(target_device),
+        "class_weights": weights_tensor,
+        "weight_diagnostics": weight_diagnostics
     }
 
 

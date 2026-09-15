@@ -10,9 +10,28 @@ Implements:
 
 import os
 import math
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional, Any, Union, Set
 import numpy as np
+
+INVALID_USER_PLACEHOLDERS: Set[str] = {
+    "", "unknown", "anonymous", "null", "none", "nan", "undefined", "default", "user"
+}
+
+
+@dataclass
+class SplitResult:
+    train_ids: Set[str]
+    val_ids: Set[str]
+    test_ids: Set[str]
+    split_by: str  # "user_id" | "session_id"
+    seed: int
+
+    def __iter__(self):
+        yield self.train_ids
+        yield self.val_ids
+        yield self.test_ids
 
 try:
     import pyarrow as pa
@@ -263,20 +282,33 @@ def split_users_leak_free(
     train_ratio: float = 0.70,
     val_ratio: float = 0.15,
     random_seed: int = 42
-) -> Tuple[Set[str], Set[str], Set[str]]:
+) -> SplitResult:
     """
-    Partition distinct user_ids (or session_ids if user_id is absent) across
-    train, validation, and test sets to guarantee zero cross-split temporal leakage.
+    Partition distinct user_ids (or session_ids if user_id is absent or unpopulated)
+    across train, validation, and test sets to guarantee zero cross-split temporal leakage.
+
+    Methodological Invariant:
+    No user (and therefore no session) appears in more than one partition when reliable
+    user_id exists. If reliable user_id is unavailable (all null, empty, or single placeholder),
+    falls back cleanly to session_id.
     """
     table = pq.read_table(parquet_path, columns=["user_id", "session_id"])
     df = table.to_pandas()
 
-    # Prefer user_id for grouping, fall back to session_id
-    valid_users = df["user_id"].dropna().unique().tolist()
-    if len(valid_users) > 5:
-        group_entities = sorted(valid_users)
+    # Filter out invalid placeholder tokens
+    raw_users = df["user_id"].dropna().astype(str).tolist()
+    valid_users = sorted(list({
+        u.strip() for u in raw_users
+        if u.strip() and u.strip().lower() not in INVALID_USER_PLACEHOLDERS
+    }))
+
+    # Reliable user_id requires > 1 distinct non-placeholder user
+    if len(valid_users) > 1:
+        group_entities = valid_users
+        split_by = "user_id"
     else:
-        group_entities = sorted(df["session_id"].unique().tolist())
+        group_entities = sorted(df["session_id"].dropna().astype(str).unique().tolist())
+        split_by = "session_id"
 
     rng = np.random.RandomState(random_seed)
     rng.shuffle(group_entities)
@@ -289,7 +321,13 @@ def split_users_leak_free(
     val_groups = set(group_entities[n_train : n_train + n_val])
     test_groups = set(group_entities[n_train + n_val :])
 
-    return train_groups, val_groups, test_groups
+    return SplitResult(
+        train_ids=train_groups,
+        val_ids=val_groups,
+        test_ids=test_groups,
+        split_by=split_by,
+        seed=random_seed
+    )
 
 
 def reconstruct_sequences_from_parquet(
@@ -297,16 +335,26 @@ def reconstruct_sequences_from_parquet(
     seq_len: int = 8,
     stride: int = 1,
     filter_users: Optional[Set[str]] = None,
-    filter_sessions: Optional[Set[str]] = None
+    filter_sessions: Optional[Set[str]] = None,
+    split_result: Optional[SplitResult] = None,
+    split_partition: Optional[str] = None,
+    enforce_temporal_continuity: bool = False,
+    max_step_gap_ms: int = 300
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Reconstruct deterministic (T, 18) sequential tensors for PyTorch GRU training
     from flattened MicroTensor Parquet scalar columns.
     Enforces deterministic temporal ordering: ORDER BY session_id, window_index.
+
+    Methodological Invariants:
+    - Partition filtering (by SplitResult, filter_users, or filter_sessions) is applied
+      strictly BEFORE sequence construction.
+    - No sequence ever spans multiple sessions.
+    - If enforce_temporal_continuity is True, sequences are segmented at time gaps > max_step_gap_ms.
+      If False, sequences represent consecutive active windows within the session.
     Returns:
         (sequences: np.ndarray [N, seq_len, 18], targets: np.ndarray [N])
     """
-    # Project only ordering metadata + 18 feature/mask columns + target
     cols_to_read = [
         "session_id", "user_id", "window_index", "window_start_ms",
         "target_label"
@@ -314,6 +362,23 @@ def reconstruct_sequences_from_parquet(
 
     table = pq.read_table(parquet_path, columns=cols_to_read)
     df = table.to_pandas()
+
+    # Apply SplitResult if provided
+    if split_result is not None:
+        target_partition = split_partition or "train"
+        if target_partition == "train":
+            p_ids = split_result.train_ids
+        elif target_partition == "val":
+            p_ids = split_result.val_ids
+        elif target_partition == "test":
+            p_ids = split_result.test_ids
+        else:
+            raise ValueError(f"Unknown split_partition: {target_partition}. Expected 'train', 'val', or 'test'.")
+
+        if split_result.split_by == "user_id":
+            filter_users = p_ids
+        else:
+            filter_sessions = p_ids
 
     # Apply user/session filter if provided
     if filter_users is not None:
@@ -331,15 +396,22 @@ def reconstruct_sequences_from_parquet(
     feature_matrix = df[feature_cols].to_numpy(dtype=np.float32)
     target_vector = df["target_label"].to_numpy(dtype=np.int64)
     session_ids = df["session_id"].values
+    window_starts = df["window_start_ms"].values
 
     sequences: List[np.ndarray] = []
     targets: List[int] = []
 
-    # Reconstruct sequences strictly within the same session
-    session_starts = np.where(session_ids[:-1] != session_ids[1:])[0] + 1
-    session_slices = np.split(np.arange(len(df)), session_starts)
+    # Segment by session boundary (and step gap if requested)
+    sess_change = session_ids[:-1] != session_ids[1:]
+    if enforce_temporal_continuity:
+        gap_break = np.diff(window_starts) > max_step_gap_ms
+        all_breaks = np.where(sess_change | gap_break)[0] + 1
+    else:
+        all_breaks = np.where(sess_change)[0] + 1
 
-    for idx_slice in session_slices:
+    slices = np.split(np.arange(len(df)), all_breaks)
+
+    for idx_slice in slices:
         if len(idx_slice) >= seq_len:
             for s in range(0, len(idx_slice) - seq_len + 1, stride):
                 window_indices = idx_slice[s : s + seq_len]

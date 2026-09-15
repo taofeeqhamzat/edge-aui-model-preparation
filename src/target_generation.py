@@ -78,12 +78,19 @@ def extract_lookahead_outcome(
     session_terminated: bool = False,
     idle_threshold_ms: float = 3000.0,
     rapid_scroll_min_events: int = 4,
-    hover_dwell_min_events: int = 2
-) -> Tuple[int, str]:
+    hover_dwell_min_events: int = 2,
+    return_metadata: bool = False
+) -> Union[Tuple[int, str], Tuple[int, str, Dict[str, Any]]]:
     """
     Extract the downstream UI outcome label from forward-looking temporal events.
     Enforces earliest-event temporal selection. Deterministic priority hierarchy
     is applied ONLY to resolve ties for events sharing the earliest timestamp.
+
+    Methodological Guardrails:
+    - Earliest qualifying event in [window_end + 500ms, window_end + 1500ms] wins.
+    - Priority hierarchy resolves ties ONLY when timestamps match within 1ms tolerance.
+    - ABANDON requires either explicit observable DOM lifecycle events (beforeunload,
+      pagehide, unload) or session_terminated (treated as recording-termination proxy).
 
     Hierarchy for ties:
     1. FORM_SUBMIT / CLICK: User commits action on target component.
@@ -93,9 +100,23 @@ def extract_lookahead_outcome(
     5. ABANDON: Observable window/session termination signals.
     6. NO_OUTCOME: Inactivity or ordinary reading pause without qualifying action.
     """
+    metadata: Dict[str, Any] = {
+        "termination_source": "none",
+        "observable_termination": False,
+        "earliest_timestamp_ms": None,
+        "tie_broken": False,
+        "candidate_count": 0
+    }
+
     if not future_events:
         if session_terminated:
+            metadata["termination_source"] = "stream_exhaustion"
+            metadata["observable_termination"] = False
+            if return_metadata:
+                return OUTCOME_NAME_TO_ID["ABANDON"], "ABANDON", metadata
             return OUTCOME_NAME_TO_ID["ABANDON"], "ABANDON"
+        if return_metadata:
+            return OUTCOME_NAME_TO_ID["NO_OUTCOME"], "NO_OUTCOME", metadata
         return OUTCOME_NAME_TO_ID["NO_OUTCOME"], "NO_OUTCOME"
 
     # Sort events deterministically by timestamp
@@ -107,8 +128,8 @@ def extract_lookahead_outcome(
 
     sorted_events = sorted(future_events, key=get_ts)
 
-    # Candidate list of (outcome_id, outcome_name, timestamp, priority_rank)
-    candidates: List[Tuple[int, str, float, int]] = []
+    # Candidate list of (outcome_id, outcome_name, timestamp, priority_rank, source)
+    candidates: List[Tuple[int, str, float, int, str]] = []
 
     scroll_events_seen = 0
     hover_events_seen = 0
@@ -126,23 +147,26 @@ def extract_lookahead_outcome(
                     OUTCOME_NAME_TO_ID["FORM_SUBMIT"],
                     "FORM_SUBMIT",
                     ev_ts,
-                    PRIORITY_RANK["FORM_SUBMIT"]
+                    PRIORITY_RANK["FORM_SUBMIT"],
+                    "dom_action"
                 ))
             else:
                 candidates.append((
                     OUTCOME_NAME_TO_ID["CLICK"],
                     "CLICK",
                     ev_ts,
-                    PRIORITY_RANK["CLICK"]
+                    PRIORITY_RANK["CLICK"],
+                    "dom_action"
                 ))
 
-        # 2. Observable Window/Session Termination (ABANDON)
+        # 2. Observable Window/Session Termination (ABANDON via lifecycle event)
         elif etype in ("beforeunload", "pagehide", "unload", "abandon"):
             candidates.append((
                 OUTCOME_NAME_TO_ID["ABANDON"],
                 "ABANDON",
                 ev_ts,
-                PRIORITY_RANK["ABANDON"]
+                PRIORITY_RANK["ABANDON"],
+                "lifecycle_event"
             ))
 
         # 3. Navigation Reversal / Focus Shift (BACKTRACK)
@@ -151,7 +175,8 @@ def extract_lookahead_outcome(
                 OUTCOME_NAME_TO_ID["BACKTRACK"],
                 "BACKTRACK",
                 ev_ts,
-                PRIORITY_RANK["BACKTRACK"]
+                PRIORITY_RANK["BACKTRACK"],
+                "navigation_shift"
             ))
 
         # 4. Rapid Scrolling (tracks count and triggers when threshold is reached)
@@ -162,7 +187,8 @@ def extract_lookahead_outcome(
                     OUTCOME_NAME_TO_ID["RAPID_SCROLL"],
                     "RAPID_SCROLL",
                     ev_ts,
-                    PRIORITY_RANK["RAPID_SCROLL"]
+                    PRIORITY_RANK["RAPID_SCROLL"],
+                    "motor_stream"
                 ))
 
         # 5. Attentional Hover Linger (triggers when threshold is reached)
@@ -173,31 +199,53 @@ def extract_lookahead_outcome(
                     OUTCOME_NAME_TO_ID["HOVER_DWELL"],
                     "HOVER_DWELL",
                     ev_ts,
-                    PRIORITY_RANK["HOVER_DWELL"]
+                    PRIORITY_RANK["HOVER_DWELL"],
+                    "motor_stream"
                 ))
+
+    metadata["candidate_count"] = len(candidates)
 
     # If no qualifying events were triggered
     if not candidates:
-        # Check for observable termination signals
+        # Check for observable termination signals in any un-triggered event
         for ev in sorted_events:
             etype = str(ev.get("event_type") or ev.get("event") or "").lower()
             if etype in ("beforeunload", "pagehide", "unload", "abandon"):
+                metadata["termination_source"] = "lifecycle_event"
+                metadata["observable_termination"] = True
+                if return_metadata:
+                    return OUTCOME_NAME_TO_ID["ABANDON"], "ABANDON", metadata
                 return OUTCOME_NAME_TO_ID["ABANDON"], "ABANDON"
         if session_terminated:
+            metadata["termination_source"] = "stream_exhaustion"
+            metadata["observable_termination"] = False
+            if return_metadata:
+                return OUTCOME_NAME_TO_ID["ABANDON"], "ABANDON", metadata
             return OUTCOME_NAME_TO_ID["ABANDON"], "ABANDON"
+        if return_metadata:
+            return OUTCOME_NAME_TO_ID["NO_OUTCOME"], "NO_OUTCOME", metadata
         return OUTCOME_NAME_TO_ID["NO_OUTCOME"], "NO_OUTCOME"
 
     # Earliest-event temporal selection:
     # 1. Find the earliest timestamp among all qualifying candidates
     earliest_ts = min(c[2] for c in candidates)
+    metadata["earliest_timestamp_ms"] = earliest_ts
 
     # 2. Filter candidates occurring at the earliest timestamp (within 1ms tolerance)
     tied_candidates = [c for c in candidates if abs(c[2] - earliest_ts) <= 1.0]
 
     # 3. Apply deterministic priority hierarchy strictly as a tie-breaker
+    if len(tied_candidates) > 1:
+        metadata["tie_broken"] = True
     tied_candidates.sort(key=lambda c: c[3], reverse=True)
     best_candidate = tied_candidates[0]
 
+    if best_candidate[1] == "ABANDON":
+        metadata["termination_source"] = best_candidate[4]
+        metadata["observable_termination"] = bool(best_candidate[4] == "lifecycle_event")
+
+    if return_metadata:
+        return best_candidate[0], best_candidate[1], metadata
     return best_candidate[0], best_candidate[1]
 
 
@@ -207,8 +255,9 @@ def extract_outcome_for_window(
     lookahead_min_ms: float = 500.0,
     lookahead_max_ms: float = 1500.0,
     rapid_scroll_min_events: int = 4,
-    hover_dwell_min_events: int = 2
-) -> Tuple[int, str]:
+    hover_dwell_min_events: int = 2,
+    return_metadata: bool = False
+) -> Union[Tuple[int, str], Tuple[int, str, Dict[str, Any]]]:
     """
     Extract the downstream UI outcome for a specific window, strictly filtering
     events to the lookahead horizon [window_end_ms + 500ms, window_end_ms + 1500ms].
@@ -235,7 +284,8 @@ def extract_outcome_for_window(
         future_events,
         session_terminated=session_terminated,
         rapid_scroll_min_events=rapid_scroll_min_events,
-        hover_dwell_min_events=hover_dwell_min_events
+        hover_dwell_min_events=hover_dwell_min_events,
+        return_metadata=return_metadata
     )
 
 
@@ -292,12 +342,16 @@ def compute_class_weights(
     allow_empty: bool = False
 ) -> torch.Tensor:
     """
-    Calculate inverse class frequency weights for loss penalization:
+    Calculate exact inverse class frequency weights for loss penalization:
     w_c = (N + C * alpha) / (C * (N_c + alpha))
 
     Safeguards:
-    If allow_empty is False and any required class has 0 samples, raises ValueError
-    to prevent concealed data defects.
+    - If allow_empty is False and any class has 0 samples, raises ValueError
+      regardless of smoothing_alpha, preventing concealed dataset defects.
+    - If allow_empty is True, an unobserved class receives weight 0.0,
+      never an inflated smoothed positive weight.
+    - No subsequent mean normalization is applied, strictly preserving the
+      exact mathematical formulation.
     """
     if not TORCH_AVAILABLE:
         raise RuntimeError("PyTorch is required to compute class weights.")
@@ -316,29 +370,90 @@ def compute_class_weights(
     total_n = float(len(t_arr))
     empty_classes = [c for c in range(num_classes) if counts[c] == 0]
 
-    if empty_classes and not allow_empty and smoothing_alpha == 0.0:
+    if empty_classes and not allow_empty:
         class_names = [OUTCOME_TAXONOMY.get(c, str(c)) for c in empty_classes]
         raise ValueError(
             f"Empty classes detected in targets: IDs {empty_classes} ({class_names}). "
-            f"Cannot compute unregularized inverse weights for classes with 0 samples."
+            f"Cannot compute class weights for classes with 0 samples. "
+            f"Set allow_empty=True to assign weight 0.0 to empty classes."
         )
 
     weights = np.zeros(num_classes, dtype=np.float32)
     for c in range(num_classes):
-        denom = float(num_classes) * (counts[c] + smoothing_alpha)
-        if denom > 0:
-            weights[c] = (total_n + float(num_classes) * smoothing_alpha) / denom
-        else:
+        if counts[c] == 0:
             weights[c] = 0.0
-
-    # Normalize weights so mean of active weights is 1.0
-    active_mask = weights > 0
-    if np.any(active_mask):
-        mean_w = np.mean(weights[active_mask])
-        if mean_w > 0:
-            weights = weights / mean_w
+        else:
+            denom = float(num_classes) * (counts[c] + smoothing_alpha)
+            if denom > 0:
+                weights[c] = float((total_n + float(num_classes) * smoothing_alpha) / denom)
+            else:
+                weights[c] = 0.0
 
     return torch.from_numpy(weights).float()
+
+
+def compute_class_weight_diagnostics(
+    targets: Union[torch.Tensor, np.ndarray, List[int]],
+    num_classes: int = 7,
+    smoothing_alpha: float = 0.0,
+    allow_empty: bool = True
+) -> Dict[str, Any]:
+    """
+    Diagnostic metrics and summary table for class weights without arbitrary clipping.
+    Reports observed counts, percentages, unnormalized weights, and the max/min_nonzero ratio.
+    """
+    if isinstance(targets, torch.Tensor):
+        t_arr = targets.detach().cpu().numpy()
+    elif isinstance(targets, np.ndarray):
+        t_arr = targets
+    else:
+        t_arr = np.array(targets)
+
+    weights_tensor = compute_class_weights(
+        t_arr,
+        num_classes=num_classes,
+        smoothing_alpha=smoothing_alpha,
+        allow_empty=allow_empty
+    )
+    weights_np = weights_tensor.numpy()
+
+    total_n = len(t_arr)
+    table = []
+    nonzero_weights = []
+    absent_classes = []
+
+    for c in range(num_classes):
+        cnt = int(np.sum(t_arr == c))
+        pct = (cnt / total_n * 100.0) if total_n > 0 else 0.0
+        w = float(weights_np[c])
+        name = OUTCOME_TAXONOMY.get(c, str(c))
+
+        if cnt == 0:
+            absent_classes.append(c)
+        else:
+            nonzero_weights.append(w)
+
+        table.append({
+            "class_id": c,
+            "class_name": name,
+            "count": cnt,
+            "percentage": pct,
+            "weight": w
+        })
+
+    max_w = float(np.max(weights_np)) if len(weights_np) > 0 else 0.0
+    min_nonzero_w = float(np.min(nonzero_weights)) if nonzero_weights else 0.0
+    max_min_ratio = (max_w / min_nonzero_w) if min_nonzero_w > 0 else float("inf")
+
+    return {
+        "summary_table": table,
+        "weights": weights_tensor,
+        "max_weight": max_w,
+        "min_nonzero_weight": min_nonzero_w,
+        "max_min_nonzero_ratio": max_min_ratio,
+        "absent_classes": absent_classes,
+        "total_samples": total_n
+    }
 
 
 def create_sample_outcome_dataset(

@@ -166,31 +166,133 @@ class TestTargetGeneration(unittest.TestCase):
         with self.assertRaises(ValueError):
             OutcomeDataset(invalid_x, y)
 
-    def test_compute_class_weights_and_empty_class_safeguard(self):
-        """Verify inverse-frequency class weights and safeguard against silent empty-class masking."""
-        # Balanced classes
-        targets_balanced = np.array([0, 1, 2, 3, 4, 5, 6] * 10)
-        weights_b = compute_class_weights(targets_balanced, num_classes=7)
-        self.assertEqual(len(weights_b), 7)
-        # For perfectly balanced classes, normalized weights should all be 1.0
-        np.testing.assert_allclose(weights_b.numpy(), np.ones(7, dtype=np.float32), atol=1e-4)
+    def test_earliest_event_wins_before_priority(self):
+        """
+        Explicitly verify:
+        1. Earliest event timestamp wins regardless of priority (CLICK at 600ms vs FORM_SUBMIT at 900ms -> CLICK).
+        2. Priority hierarchy applies strictly as tie-breaker for identical timestamps (600ms vs 600ms -> FORM_SUBMIT).
+        """
+        # Case 1: Earliest timestamp wins (CLICK @ 600ms vs FORM_SUBMIT @ 900ms)
+        evs_diff_time = [
+            {"timestamp_ms": 600.0, "event_type": "click", "xpath": "/html/body/div"},
+            {"timestamp_ms": 900.0, "event_type": "click", "xpath": "/html/body/form/input[@type='submit']"}
+        ]
+        label_id1, label_name1 = extract_lookahead_outcome(evs_diff_time)
+        self.assertEqual(label_name1, "CLICK")
+        self.assertEqual(label_id1, OUTCOME_NAME_TO_ID["CLICK"])
 
-        # Imbalanced classes
-        targets_imbalanced = np.array([0]*50 + [1]*10 + [2]*5 + [3]*5 + [4]*10 + [5]*20 + [6]*8)
-        weights_imb = compute_class_weights(targets_imbalanced, num_classes=7)
-        # Class 2 (5 samples) should have higher penalty weight than Class 0 (50 samples)
-        self.assertGreater(weights_imb[2].item(), weights_imb[0].item())
+        # Case 2: Tied timestamps resolve by priority (FORM_SUBMIT > CLICK)
+        evs_tied_time = [
+            {"timestamp_ms": 600.0, "event_type": "click", "xpath": "/html/body/div"},
+            {"timestamp_ms": 600.0, "event_type": "click", "xpath": "/html/body/form/input[@type='submit']"}
+        ]
+        label_id2, label_name2 = extract_lookahead_outcome(evs_tied_time)
+        self.assertEqual(label_name2, "FORM_SUBMIT")
+        self.assertEqual(label_id2, OUTCOME_NAME_TO_ID["FORM_SUBMIT"])
 
-        # Empty class safeguard: Class 4 is missing
+    def test_observable_abandonment_vs_stream_exhaustion(self):
+        """
+        Verify:
+        - Explicit lifecycle events (beforeunload, pagehide, unload) produce observable abandonment.
+        - Stream exhaustion (session_terminated without lifecycle events) produces recording-termination proxy.
+        - Invariant: last recorded event != observable abandonment unless explicit lifecycle signal exists.
+        """
+        # Explicit lifecycle event
+        unload_evs = [{"timestamp_ms": 800, "event_type": "beforeunload"}]
+        _, name_life, meta_life = extract_lookahead_outcome(unload_evs, return_metadata=True)
+        self.assertEqual(name_life, "ABANDON")
+        self.assertEqual(meta_life["termination_source"], "lifecycle_event")
+        self.assertTrue(meta_life["observable_termination"])
+
+        # Stream exhaustion proxy
+        _, name_proxy, meta_proxy = extract_lookahead_outcome([], session_terminated=True, return_metadata=True)
+        self.assertEqual(name_proxy, "ABANDON")
+        self.assertEqual(meta_proxy["termination_source"], "stream_exhaustion")
+        self.assertFalse(meta_proxy["observable_termination"])
+
+        # Continuing session without events -> NO_OUTCOME (not abandonment)
+        _, name_cont, meta_cont = extract_lookahead_outcome([], session_terminated=False, return_metadata=True)
+        self.assertEqual(name_cont, "NO_OUTCOME")
+        self.assertFalse(meta_cont["observable_termination"])
+
+    def test_compute_class_weights_exact_formula(self):
+        """
+        Verify exact formula w_c = (N + C*alpha) / (C * (N_c + alpha)) without mean normalization.
+        """
+        # Imbalanced counts: 100 samples total, 7 classes: [40, 30, 10, 10, 5, 3, 2]
+        counts = [40, 30, 10, 10, 5, 3, 2]
+        targets = []
+        for c, cnt in enumerate(counts):
+            targets.extend([c] * cnt)
+        targets = np.array(targets)
+        N = 100.0
+        C = 7.0
+
+        # Alpha = 0.0 (exact inverse frequency)
+        w_zero = compute_class_weights(targets, num_classes=7, smoothing_alpha=0.0)
+        self.assertEqual(w_zero.shape, (7,))
+        self.assertEqual(w_zero.dtype, torch.float32)
+        for c in range(7):
+            expected_w = N / (C * counts[c])
+            self.assertAlmostEqual(w_zero[c].item(), expected_w, places=4)
+
+        # Alpha = 2.0 (smoothed inverse frequency)
+        alpha = 2.0
+        w_smooth = compute_class_weights(targets, num_classes=7, smoothing_alpha=alpha)
+        for c in range(7):
+            expected_w = (N + C * alpha) / (C * (counts[c] + alpha))
+            self.assertAlmostEqual(w_smooth[c].item(), expected_w, places=4)
+
+    def test_compute_class_weights_empty_class_safeguards(self):
+        """
+        Verify:
+        - When allow_empty=False, missing classes raise ValueError EVEN with smoothing_alpha > 0.
+        - When allow_empty=True, missing classes receive weight 0.0 (never inflated smoothed weight).
+        """
+        # Class 4 is missing
         targets_missing = np.array([0]*20 + [1]*10 + [2]*5 + [3]*5 + [5]*20 + [6]*5)
-        with self.assertRaises(ValueError) as ctx:
-            compute_class_weights(targets_missing, num_classes=7, allow_empty=False)
-        self.assertIn("Empty classes detected", str(ctx.exception))
 
-        # Smoothing allows non-zero computation even with missing classes
-        smoothed_w = compute_class_weights(targets_missing, num_classes=7, smoothing_alpha=1.0)
-        self.assertEqual(len(smoothed_w), 7)
-        self.assertGreater(smoothed_w[4].item(), 0.0)
+        # allow_empty=False with alpha=0 -> raises ValueError
+        with self.assertRaises(ValueError) as ctx1:
+            compute_class_weights(targets_missing, num_classes=7, allow_empty=False, smoothing_alpha=0.0)
+        self.assertIn("Empty classes detected", str(ctx1.exception))
+
+        # allow_empty=False with alpha=1.0 -> STILL raises ValueError (no silent bypass)
+        with self.assertRaises(ValueError) as ctx2:
+            compute_class_weights(targets_missing, num_classes=7, allow_empty=False, smoothing_alpha=1.0)
+        self.assertIn("Empty classes detected", str(ctx2.exception))
+
+        # allow_empty=True -> missing class 4 gets weight 0.0
+        w_allow = compute_class_weights(targets_missing, num_classes=7, allow_empty=True, smoothing_alpha=1.0)
+        self.assertEqual(w_allow[4].item(), 0.0)
+        self.assertGreater(w_allow[0].item(), 0.0)
+
+    def test_compute_class_weight_diagnostics(self):
+        """Verify diagnostic helper reports max, min nonzero, and correct ratio."""
+        from target_generation import compute_class_weight_diagnostics
+        targets = np.array([0]*50 + [1]*25 + [2]*25)
+        diag = compute_class_weight_diagnostics(targets, num_classes=4, smoothing_alpha=0.0, allow_empty=True)
+
+        self.assertIn("max_weight", diag)
+        self.assertIn("min_nonzero_weight", diag)
+        self.assertIn("max_min_nonzero_ratio", diag)
+        self.assertEqual(diag["absent_classes"], [3])
+        self.assertAlmostEqual(diag["max_min_nonzero_ratio"], 2.0, places=3)
+        self.assertEqual(len(diag["summary_table"]), 4)
+
+    def test_train_only_weighting_invariant(self):
+        """
+        Demonstrate and test the invariant that class weights computed on the training partition
+        must not incorporate validation or test distribution information.
+        """
+        train_targets = np.array([0]*100 + [1]*50 + [2]*10)
+        test_targets = np.array([0]*10 + [1]*50 + [2]*40)  # distribution shift in test
+
+        w_train = compute_class_weights(train_targets, num_classes=3, allow_empty=False)
+        w_combined = compute_class_weights(np.concatenate([train_targets, test_targets]), num_classes=3, allow_empty=False)
+
+        # Invariant: Training weights and combined weights differ due to shift; using combined in training leaks test stats
+        self.assertFalse(np.allclose(w_train.numpy(), w_combined.numpy()))
 
     def test_create_sample_outcome_dataset(self):
         """Verify create_sample_outcome_dataset factory produces valid dataset with all 7 classes."""

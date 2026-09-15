@@ -101,6 +101,61 @@ class TestGRUArchitecture(unittest.TestCase):
             elif "_l0" in name:  # Layer 0 is lower layer
                 self.assertFalse(p.requires_grad, f"Expected {name} to be frozen")
 
+    def test_hidden_state_numerical_equivalence(self):
+        """
+        Verify that out[:, -1, :] is numerically equivalent to h_n[-1] for a
+        2-layer unidirectional GRU, proving that latent slicing extracts the exact
+        final-layer terminal recurrent state.
+        """
+        model = EdgeAUIGRU(input_dim=18, hidden_dim=64, num_layers=2, num_classes=7)
+        x = torch.randn(8, 12, 18)
+
+        out_gru, h_n = model.gru(x)
+        h_T_slice = out_gru[:, -1, :]
+        h_n_terminal = h_n[-1]
+
+        # Numerical equivalence assertion
+        self.assertTrue(torch.allclose(h_T_slice, h_n_terminal, atol=1e-6))
+
+        # Model return_latent extraction equivalence
+        _, extracted_h_T = model(x, return_latent=True)
+        self.assertTrue(torch.allclose(extracted_h_T, h_n_terminal, atol=1e-6))
+
+    def test_behavioral_gradient_flow(self):
+        """
+        Behavioral test of gradient flow:
+        1. When backbone is frozen, backbone parameter gradients must be None after backward(),
+           while head gradients must be non-zero.
+        2. When backbone is unfrozen, backbone parameter gradients must be actively populated.
+        """
+        model = EdgeAUIGRU(input_dim=18, hidden_dim=64, num_layers=2, num_classes=7)
+        x = torch.randn(4, 8, 18)
+
+        # 1. Test Frozen Backbone gradient behavior
+        model.freeze_backbone()
+        model.zero_grad()
+        out = model(x)
+        loss = out.sum()
+        loss.backward()
+
+        for name, p in model.gru.named_parameters():
+            self.assertIsNone(p.grad, f"Expected no gradient for frozen backbone parameter: {name}")
+
+        for name, p in model.head.named_parameters():
+            self.assertIsNotNone(p.grad, f"Expected active gradient for head parameter: {name}")
+            self.assertFalse(torch.all(p.grad == 0.0), f"Expected non-zero gradient for: {name}")
+
+        # 2. Test Unfrozen Backbone gradient behavior
+        model.unfreeze_backbone()
+        model.zero_grad()
+        out = model(x)
+        loss = out.sum()
+        loss.backward()
+
+        for name, p in model.gru.named_parameters():
+            self.assertIsNotNone(p.grad, f"Expected active gradient for unfrozen parameter: {name}")
+            self.assertFalse(torch.all(p.grad == 0.0), f"Expected non-zero gradient for: {name}")
+
     def test_task_4_1_verification_contract(self):
         """Execute the exact Task 4.1 verification contract command."""
         m = training.EdgeAUIGRU(18, 64, 2, 7)
