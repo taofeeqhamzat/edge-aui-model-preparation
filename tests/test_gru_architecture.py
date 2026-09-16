@@ -173,6 +173,74 @@ class TestGRUArchitecture(unittest.TestCase):
         self.assertEqual(h.shape, (2, 64))
         self.assertEqual(out.shape, (2, 7))
 
+    def test_task_4_2_verification_contract(self):
+        """Execute the exact Task 4.2 verification contract commands."""
+        m = training.EdgeAUIGRU(18, 64, 2, 7)
+        h = torch.randn(2, 64)
+        c = torch.randn(2, 6)
+        head = training.TargetInterventionHead(hidden_dim=64, context_dim=6, num_classes=5)
+        out = head(h, c)
+        self.assertEqual(out.shape, (2, 5))
+
+    def test_ranking_diagnostics_calculation(self):
+        """Verify Hit Rate@K (HR@1, HR@3) and Mean Reciprocal Rank (MRR) mathematical computation."""
+        from training import compute_ranking_diagnostics
+        import numpy as np
+
+        # Sample 0: true=1, sorted=[1, 0, 2, 3] -> rank 1 (top 1)
+        # Sample 1: true=2, sorted=[0, 2, 1, 3] -> rank 2 (top 3)
+        # Sample 2: true=3, sorted=[0, 1, 2, 3] -> rank 4 (neither top 1 nor top 3)
+        logits = np.array([
+            [0.1, 0.9, 0.3, 0.2],
+            [0.5, 0.1, 0.4, 0.2],
+            [0.8, 0.6, 0.4, 0.2]
+        ])
+        targets = np.array([1, 2, 3])
+
+        diag = compute_ranking_diagnostics(logits, targets, ks=(1, 3))
+        self.assertAlmostEqual(diag["hr@1"], 1.0 / 3.0, places=4)
+        self.assertAlmostEqual(diag["hr@3"], 2.0 / 3.0, places=4)
+        # MRR = (1/1 + 1/2 + 1/4) / 3 = 1.75 / 3 = 0.58333...
+        self.assertAlmostEqual(diag["mrr"], 1.75 / 3.0, places=4)
+        self.assertEqual(diag["n_samples"], 3)
+        self.assertIn("diagnostic_note", diag)
+
+    def test_evaluate_foundation_model_contract(self):
+        """Verify evaluate_foundation_model returns comprehensive metrics dictionary."""
+        from training import evaluate_foundation_model, EdgeAUIGRU
+        from preprocessing import MicroInteractionSequenceDataset
+
+        # Synthetic small dataset
+        X = torch.randn(20, 8, 18)
+        Y = torch.randint(0, 7, (20,))
+        eval_ds = MicroInteractionSequenceDataset(X, Y)
+
+        train_X = torch.randn(40, 8, 18)
+        train_Y = torch.randint(0, 7, (40,))
+        train_ds = MicroInteractionSequenceDataset(train_X, train_Y)
+
+        model = EdgeAUIGRU(18, 32, 1, 7)
+        res = evaluate_foundation_model(
+            model=model,
+            eval_dataset=eval_ds,
+            train_dataset=train_ds,
+            num_classes=7,
+            verbose=False
+        )
+
+        self.assertIn("accuracy", res)
+        self.assertIn("macro_f1", res)
+        self.assertIn("weighted_f1", res)
+        self.assertIn("per_class", res)
+        self.assertIn("confusion_matrix", res)
+        self.assertIn("ranking_diagnostics", res)
+        self.assertIn("majority_baseline", res)
+        self.assertEqual(len(res["confusion_matrix"]), 7)
+        self.assertEqual(len(res["per_class"]), 7)
+        self.assertIn("hr@1", res["ranking_diagnostics"])
+        self.assertIn("hr@3", res["ranking_diagnostics"])
+        self.assertIn("mrr", res["ranking_diagnostics"])
+
 
 if __name__ == "__main__":
     unittest.main()

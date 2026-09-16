@@ -7,10 +7,17 @@ import os
 import sys
 import argparse
 from typing import Optional, Dict, Any, List, Union, Tuple
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+
+try:
+    from sklearn.metrics import precision_recall_fscore_support, f1_score, confusion_matrix
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
 
 try:
     from preprocessing import MicroInteractionSequenceDataset, FEATURE_NAMES, MICROTENSOR_DIM
@@ -348,6 +355,233 @@ def evaluate_majority_baseline(
     }
 
 
+def compute_ranking_diagnostics(
+    logits: Union[np.ndarray, torch.Tensor],
+    targets: Union[np.ndarray, torch.Tensor],
+    ks: Tuple[int, ...] = (1, 3)
+) -> Dict[str, Any]:
+    """
+    Compute secondary ranking diagnostics: Hit Rate@K (Top-K accuracy) and Mean Reciprocal Rank (MRR).
+
+    Methodological Note (ADR-003, Task 4.2):
+    Ranking diagnostics (HR@K, MRR) evaluate relative score ordering among downstream candidate
+    outcomes. In accordance with the project's interaction-outcome framing, these serve as auxiliary
+    ranking diagnostics rather than primary classification criteria. Macro-F1 and per-class metrics
+    remain the primary criteria.
+
+    Parameters:
+        logits: Model output logits or predicted probabilities of shape (N, num_classes).
+        targets: Ground-truth class labels of shape (N,).
+        ks: Tuple of K thresholds for Hit Rate@K (default: (1, 3)).
+
+    Returns:
+        Dict containing hr_at_k for each k in ks, mrr, and descriptive diagnostic note.
+    """
+    if isinstance(logits, torch.Tensor):
+        logits = logits.detach().cpu().numpy()
+    if isinstance(targets, torch.Tensor):
+        targets = targets.detach().cpu().numpy()
+
+    logits = np.asarray(logits)
+    targets = np.asarray(targets)
+    n_samples = len(targets)
+
+    if n_samples == 0:
+        return {
+            "hr@1": 0.0,
+            "hr@3": 0.0,
+            "mrr": 0.0,
+            "n_samples": 0,
+            "diagnostic_note": "Secondary ranking diagnostics evaluated over 0 samples."
+        }
+
+    # Sort logits descending: shape (N, num_classes)
+    sorted_indices = np.argsort(-logits, axis=1)
+
+    hr_results = {}
+    for k in ks:
+        # Check if true target is within top-k sorted predictions
+        hits = np.any(sorted_indices[:, :k] == targets[:, None], axis=1)
+        hr_results[f"hr@{k}"] = float(np.mean(hits))
+
+    # Mean Reciprocal Rank (MRR)
+    # rank is 1-indexed position of targets[i] in sorted_indices[i]
+    ranks = np.where(sorted_indices == targets[:, None])[1] + 1
+    mrr = float(np.mean(1.0 / ranks))
+
+    return {
+        **hr_results,
+        "mrr": mrr,
+        "n_samples": int(n_samples),
+        "diagnostic_note": "Secondary ranking diagnostics (HR@K, MRR) evaluate relative outcome ordering rather than primary classification criteria."
+    }
+
+
+def evaluate_foundation_model(
+    model: nn.Module,
+    eval_dataset: Union[MicroInteractionSequenceDataset, DataLoader],
+    criterion: Optional[nn.Module] = None,
+    device: Optional[Union[str, torch.device]] = None,
+    batch_size: int = BATCH_SIZE,
+    num_classes: int = NUM_CLASSES,
+    train_dataset: Optional[MicroInteractionSequenceDataset] = None,
+    verbose: bool = True
+) -> Dict[str, Any]:
+    """
+    Comprehensive evaluation of EdgeAUIGRU with FoundationOutcomeHead on interaction sequences.
+
+    Primary Metrics:
+      - Macro-F1: Unweighted mean of per-class F1 scores across classes with support.
+      - Weighted-F1: Support-weighted mean of per-class F1 scores.
+      - Per-Class Metrics: Precision, Recall, F1, and Support per outcome class.
+      - Confusion Matrix: Empirical (num_classes x num_classes) transition matrix.
+      - Majority-Class Baseline Comparison: Direct delta comparison against majority predictor.
+
+    Secondary Diagnostics:
+      - Hit Rate@1, Hit Rate@3, and Mean Reciprocal Rank (MRR), explicitly documented
+        as secondary ranking diagnostics rather than primary classification criteria.
+    """
+    target_device = get_device(device) if device is None or isinstance(device, str) else device
+    model.eval()
+    model.to(target_device)
+
+    if isinstance(eval_dataset, DataLoader):
+        dataloader = eval_dataset
+        total_eval_samples = len(eval_dataset.dataset) if hasattr(eval_dataset, "dataset") else 0
+    else:
+        dataloader = DataLoader(eval_dataset, batch_size=batch_size, shuffle=False)
+        total_eval_samples = len(eval_dataset)
+
+    if total_eval_samples == 0:
+        if verbose:
+            print("[Evaluation] Warning: Evaluation dataset is empty.")
+        return {
+            "eval_loss": 0.0,
+            "accuracy": 0.0,
+            "macro_f1": 0.0,
+            "weighted_f1": 0.0,
+            "per_class": {},
+            "confusion_matrix": [],
+            "ranking_diagnostics": compute_ranking_diagnostics(np.empty((0, num_classes)), np.empty(0)),
+            "majority_baseline": None,
+            "n_samples": 0
+        }
+
+    total_loss = 0.0
+    total_samples = 0
+    all_logits_list = []
+    all_targets_list = []
+
+    with torch.no_grad():
+        for batch_x, batch_y in dataloader:
+            batch_x = batch_x.to(target_device)
+            batch_y = batch_y.to(target_device)
+
+            outputs = model(batch_x)
+            if criterion is not None:
+                loss = criterion(outputs, batch_y)
+                total_loss += loss.item() * batch_x.size(0)
+
+            total_samples += batch_y.size(0)
+            all_logits_list.append(outputs.detach().cpu().numpy())
+            all_targets_list.append(batch_y.detach().cpu().numpy())
+
+    logits_arr = np.concatenate(all_logits_list, axis=0)
+    targets_arr = np.concatenate(all_targets_list, axis=0)
+    preds_arr = np.argmax(logits_arr, axis=1)
+
+    avg_loss = total_loss / max(total_samples, 1) if criterion is not None else 0.0
+    accuracy = float(np.mean(preds_arr == targets_arr)) * 100.0
+
+    # Empirical Confusion Matrix: shape (num_classes, num_classes)
+    cm = np.zeros((num_classes, num_classes), dtype=int)
+    for t, p in zip(targets_arr, preds_arr):
+        if 0 <= t < num_classes and 0 <= p < num_classes:
+            cm[t, p] += 1
+
+    # Per-Class Precision, Recall, F1, and Support
+    per_class_metrics = {}
+    f1_list = []
+    weighted_f1_sum = 0.0
+
+    for c in range(num_classes):
+        c_name = OUTCOME_TAXONOMY.get(c, str(c))
+        tp = int(cm[c, c])
+        fp = int(np.sum(cm[:, c]) - tp)
+        fn = int(np.sum(cm[c, :]) - tp)
+        support = int(np.sum(cm[c, :]))
+
+        prec = float(tp / (tp + fp)) if (tp + fp) > 0 else 0.0
+        rec = float(tp / (tp + fn)) if (tp + fn) > 0 else 0.0
+        f1 = float(2 * prec * rec / (prec + rec)) if (prec + rec) > 0 else 0.0
+
+        per_class_metrics[c_name] = {
+            "class_id": c,
+            "precision": prec,
+            "recall": rec,
+            "f1": f1,
+            "support": support
+        }
+        if support > 0:
+            f1_list.append(f1)
+            weighted_f1_sum += f1 * support
+
+    macro_f1 = float(np.mean(f1_list)) if f1_list else 0.0
+    weighted_f1 = float(weighted_f1_sum / total_samples) if total_samples > 0 else 0.0
+
+    # Secondary Ranking Diagnostics
+    ranking_diagnostics = compute_ranking_diagnostics(logits_arr, targets_arr, ks=(1, 3))
+
+    # Majority Baseline Comparison
+    baseline_metrics = None
+    if train_dataset is not None:
+        if isinstance(eval_dataset, MicroInteractionSequenceDataset):
+            baseline_metrics = evaluate_majority_baseline(train_dataset, eval_dataset, num_classes=num_classes)
+        else:
+            baseline_metrics = evaluate_majority_baseline(train_dataset, targets_arr, num_classes=num_classes)
+
+    if verbose:
+        print("\n" + "=" * 80)
+        print("           FOUNDATION GRU OUTCOME CLASSIFICATION EVALUATION REPORT")
+        print("=" * 80)
+        print(f"{'Class Name':<18} {'Class ID':<10} {'Precision':<12} {'Recall':<12} {'F1-Score':<12} {'Support':<10}")
+        print("-" * 80)
+        for c_name, m in per_class_metrics.items():
+            print(f"{c_name:<18} {m['class_id']:<10} {m['precision']:<12.4f} {m['recall']:<12.4f} {m['f1']:<12.4f} {m['support']:<10}")
+        print("-" * 80)
+        print(f"Overall Accuracy:  {accuracy:.2f}% ({int(np.sum(preds_arr == targets_arr))}/{total_samples})")
+        print(f"Macro-F1:          {macro_f1:.4f}  (Primary unweighted metric across classes with support)")
+        print(f"Weighted-F1:       {weighted_f1:.4f}")
+        if criterion is not None:
+            print(f"Evaluation Loss:   {avg_loss:.4f}")
+
+        print("\n[Secondary Ranking Diagnostics - Auxiliary Diagnostics, Not Primary Criteria]")
+        print(f" - Hit Rate @ 1 (HR@1):           {ranking_diagnostics['hr@1'] * 100:.2f}%")
+        print(f" - Hit Rate @ 3 (HR@3):           {ranking_diagnostics['hr@3'] * 100:.2f}%")
+        print(f" - Mean Reciprocal Rank (MRR):     {ranking_diagnostics['mrr']:.4f}")
+
+        if baseline_metrics is not None:
+            print("\n[Majority-Class Baseline Comparison]")
+            print(f" - Majority Class:                {baseline_metrics['majority_class_name']} (ID {baseline_metrics['majority_class_id']})")
+            print(f" - Baseline Accuracy:             {baseline_metrics['accuracy'] * 100:.2f}%")
+            print(f" - Baseline Macro-F1:             {baseline_metrics['macro_f1']:.4f}")
+            delta_macro = macro_f1 - baseline_metrics['macro_f1']
+            print(f" - Model Macro-F1 vs Baseline:    {macro_f1:.4f} vs {baseline_metrics['macro_f1']:.4f} (Delta: {'+' if delta_macro >= 0 else ''}{delta_macro:.4f})")
+        print("=" * 80 + "\n")
+
+    return {
+        "eval_loss": float(avg_loss),
+        "accuracy": float(accuracy),
+        "macro_f1": float(macro_f1),
+        "weighted_f1": float(weighted_f1),
+        "per_class": per_class_metrics,
+        "confusion_matrix": cm.tolist(),
+        "ranking_diagnostics": ranking_diagnostics,
+        "majority_baseline": baseline_metrics,
+        "n_samples": int(total_samples)
+    }
+
+
 def train_foundation_model(
     data_dir: Optional[str] = None,
     hf_repo_id: str = "T40/edge-aui-framework-data",
@@ -361,12 +595,14 @@ def train_foundation_model(
     max_files_per_dataset: Optional[int] = None,
     device: Optional[str] = None,
     output_dir: Optional[str] = None,
-    class_weights: Optional[Union[torch.Tensor, str]] = None,
+    class_weights: Optional[Union[torch.Tensor, str]] = "smoothed",
+    evaluate_val: bool = True,
+    val_dataset: Optional[MicroInteractionSequenceDataset] = None,
     verbose: bool = True
 ) -> Dict[str, Any]:
     """
-    Foundational training loop for EdgeAUIGRU.
-    Supports local datasets as well as automatic hosted synchronization from Hugging Face Hub.
+    Foundational training loop for EdgeAUIGRU with FoundationOutcomeHead.
+    Supports session-bounded leak-free training/validation partitions and empty-class safe loss weighting.
 
     Methodological Invariant:
     If class_weights is 'inverse' or 'smoothed', weights are calculated strictly from the
@@ -384,10 +620,26 @@ def train_foundation_model(
         max_sequences=max_sequences,
         split="train"
     )
-    
+
     if len(dataset) == 0:
         print(f"[Training] Warning: No valid sequences found in {target_data_dir}. Ensure data is populated.")
         return {"model": None, "history": {"loss": [], "accuracy": []}}
+
+    # Load validation split if requested
+    if val_dataset is None and evaluate_val:
+        if verbose:
+            print(f"[Training] Loading interaction sequences from Parquet storage (val split)...")
+        max_val = max(1, int(max_sequences * 0.2)) if max_sequences else None
+        try:
+            val_dataset = load_foundation_dataset(
+                data_dir=target_data_dir,
+                max_sequences=max_val,
+                split="val"
+            )
+        except Exception as e:
+            if verbose:
+                print(f"[Training] Notice: Could not load validation dataset ({e}). Proceeding without validation split.")
+            val_dataset = None
 
     # Resolve class weights strictly on training partition targets
     weights_tensor: Optional[torch.Tensor] = None
@@ -429,21 +681,29 @@ def train_foundation_model(
             print(f" [ALERT] Severe class imbalance: max/min weight ratio is {weight_diagnostics['max_min_nonzero_ratio']:.1f}x. Monitor training stability.")
 
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-    
+
     model = EdgeAUIGRU(
-        input_dim=MICROTENSOR_DIM, 
-        hidden_dim=hidden_dim, 
-        num_layers=num_layers, 
+        input_dim=MICROTENSOR_DIM,
+        hidden_dim=hidden_dim,
+        num_layers=num_layers,
         num_classes=NUM_CLASSES
     ).to(target_device)
-    
+
     if weights_tensor is not None:
         criterion = nn.CrossEntropyLoss(weight=weights_tensor.to(target_device))
     else:
         criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
-    
-    history: Dict[str, List[float]] = {"loss": [], "accuracy": []}
+
+    history: Dict[str, List[float]] = {
+        "loss": [],
+        "accuracy": [],
+        "val_loss": [],
+        "val_accuracy": [],
+        "val_macro_f1": []
+    }
+
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False) if val_dataset and len(val_dataset) > 0 else None
 
     if verbose:
         print(f"[Training] Starting Foundational Training: {epochs} epochs over {len(dataset)} sequences on {target_device}...")
@@ -453,32 +713,101 @@ def train_foundation_model(
         total_loss = 0.0
         correct = 0
         total = 0
-        
+
         for batch_x, batch_y in dataloader:
             batch_x = batch_x.to(target_device)
             batch_y = batch_y.to(target_device)
 
             optimizer.zero_grad()
-            
+
             outputs = model(batch_x)
             loss = criterion(outputs, batch_y)
             loss.backward()
             optimizer.step()
-            
+
             total_loss += loss.item() * batch_x.size(0)
-            
+
             _, predicted = torch.max(outputs.data, 1)
             total += batch_y.size(0)
             correct += (predicted == batch_y).sum().item()
-            
+
         epoch_loss = total_loss / max(total, 1)
         epoch_acc = 100.0 * correct / max(total, 1)
         history["loss"].append(epoch_loss)
         history["accuracy"].append(epoch_acc)
 
+        # Validation step
+        if val_loader is not None:
+            model.eval()
+            val_loss = 0.0
+            val_correct = 0
+            val_total = 0
+            val_preds = []
+            val_targets = []
+            with torch.no_grad():
+                for v_x, v_y in val_loader:
+                    v_x = v_x.to(target_device)
+                    v_y = v_y.to(target_device)
+                    v_out = model(v_x)
+                    v_l = criterion(v_out, v_y)
+                    val_loss += v_l.item() * v_x.size(0)
+                    _, v_pred = torch.max(v_out.data, 1)
+                    val_total += v_y.size(0)
+                    val_correct += (v_pred == v_y).sum().item()
+                    val_preds.append(v_pred.cpu().numpy())
+                    val_targets.append(v_y.cpu().numpy())
+
+            epoch_val_loss = val_loss / max(val_total, 1)
+            epoch_val_acc = 100.0 * val_correct / max(val_total, 1)
+
+            # Compute quick val macro-f1
+            vp = np.concatenate(val_preds, axis=0) if val_preds else np.empty(0)
+            vt = np.concatenate(val_targets, axis=0) if val_targets else np.empty(0)
+            if len(vt) > 0:
+                epoch_cm = np.zeros((NUM_CLASSES, NUM_CLASSES), dtype=int)
+                for t_i, p_i in zip(vt, vp):
+                    if 0 <= t_i < NUM_CLASSES and 0 <= p_i < NUM_CLASSES:
+                        epoch_cm[t_i, p_i] += 1
+                f1s = []
+                for c in range(NUM_CLASSES):
+                    s_c = np.sum(epoch_cm[c, :])
+                    if s_c > 0:
+                        tp_c = epoch_cm[c, c]
+                        fp_c = np.sum(epoch_cm[:, c]) - tp_c
+                        fn_c = s_c - tp_c
+                        p_c = tp_c / (tp_c + fp_c) if (tp_c + fp_c) > 0 else 0.0
+                        r_c = tp_c / (tp_c + fn_c) if (tp_c + fn_c) > 0 else 0.0
+                        f1_c = 2 * p_c * r_c / (p_c + r_c) if (p_c + r_c) > 0 else 0.0
+                        f1s.append(f1_c)
+                epoch_val_macro_f1 = float(np.mean(f1s)) if f1s else 0.0
+            else:
+                epoch_val_macro_f1 = 0.0
+
+            history["val_loss"].append(epoch_val_loss)
+            history["val_accuracy"].append(epoch_val_acc)
+            history["val_macro_f1"].append(epoch_val_macro_f1)
+
+            if verbose:
+                print(f"Epoch [{epoch+1}/{epochs}] - Train Loss: {epoch_loss:.4f}, Train Acc: {epoch_acc:.2f}% | Val Loss: {epoch_val_loss:.4f}, Val Acc: {epoch_val_acc:.2f}%, Val Macro-F1: {epoch_val_macro_f1:.4f}")
+        else:
+            if verbose:
+                print(f"Epoch [{epoch+1}/{epochs}] - Train Loss: {epoch_loss:.4f}, Train Acc: {epoch_acc:.2f}%")
+
+    # Final comprehensive evaluation on validation split
+    val_eval_results = None
+    if val_dataset is not None and len(val_dataset) > 0:
         if verbose:
-            print(f"Epoch [{epoch+1}/{epochs}], Loss: {epoch_loss:.4f}, Accuracy: {epoch_acc:.2f}%")
-        
+            print("[Training] Running comprehensive final validation evaluation...")
+        val_eval_results = evaluate_foundation_model(
+            model=model,
+            eval_dataset=val_dataset,
+            criterion=criterion,
+            device=target_device,
+            num_classes=NUM_CLASSES,
+            train_dataset=dataset,
+            verbose=verbose
+        )
+
     # Resolve model output path
     if output_dir is None:
         proj_root = find_project_root()
@@ -490,17 +819,24 @@ def train_foundation_model(
     model_path = os.path.join(models_path, "foundational_gru.pth")
     torch.save(model.state_dict(), model_path)
 
+    # Sanity check saved checkpoint
+    assert os.path.isfile(model_path), f"Failed to save model to {model_path}"
+    saved_state = torch.load(model_path, map_location="cpu", weights_only=True)
+    assert "gru.weight_ih_l0" in saved_state, "Corrupted state dict: missing GRU weights"
+
     if verbose:
-        print(f"[Training] Foundational model successfully saved to: {model_path}")
+        print(f"[Training] Foundational model successfully saved to: {model_path} ({os.path.getsize(model_path) / 1024:.1f} KB)")
 
     return {
         "model": model,
         "model_path": model_path,
         "history": history,
         "dataset_size": len(dataset),
+        "val_dataset_size": len(val_dataset) if val_dataset else 0,
         "device": str(target_device),
         "class_weights": weights_tensor,
-        "weight_diagnostics": weight_diagnostics
+        "weight_diagnostics": weight_diagnostics,
+        "val_evaluation": val_eval_results
     }
 
 
@@ -514,8 +850,10 @@ if __name__ == "__main__":
     parser.add_argument("--max-sequences", type=int, default=None, help="Cap max sequences for fast iteration")
     parser.add_argument("--device", type=str, default=None, help="Execution device (cuda/mps/cpu)")
     parser.add_argument("--output-dir", type=str, default=None, help="Directory to save checkpoints")
+    parser.add_argument("--class-weights", type=str, default="smoothed", choices=["smoothed", "inverse", "none"], help="Class weighting scheme")
     args = parser.parse_args()
 
+    cw = None if args.class_weights == "none" else args.class_weights
     train_foundation_model(
         data_dir=args.data_dir,
         hf_repo_id=args.hf_repo,
@@ -524,5 +862,6 @@ if __name__ == "__main__":
         lr=args.lr,
         max_sequences=args.max_sequences,
         device=args.device,
-        output_dir=args.output_dir
+        output_dir=args.output_dir,
+        class_weights=cw
     )

@@ -52,7 +52,13 @@ class TestTrainingContract(unittest.TestCase):
             )
             self.assertIsNotNone(res["model"])
             self.assertEqual(len(res["history"]["loss"]), 2)
+            self.assertEqual(len(res["history"]["accuracy"]), 2)
             self.assertTrue(os.path.isfile(res["model_path"]))
+            self.assertIn("val_evaluation", res)
+            if res["val_evaluation"] is not None:
+                self.assertIn("macro_f1", res["val_evaluation"])
+                self.assertIn("accuracy", res["val_evaluation"])
+                self.assertIn("ranking_diagnostics", res["val_evaluation"])
 
 
 if __name__ == "__main__":
