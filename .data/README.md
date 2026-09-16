@@ -14,17 +14,18 @@ tags:
 
 # Dataset Card: Edge-Native Adaptive UI Behavioral Logs
 
-This repository stores aggregated behavioral interaction logs in the microtensor parquet format.
+This repository stores aggregated behavioral interaction logs in raw and processed forms in the data storage parquet format.
 These logs support research on edge-native adaptive user interfaces.
 
 ## 1. Hosted Data
 
 The repository hosts microtensor parquet files derived from five public research datasets:
-- Client-Side Action Paths (Ou et al., 2021).
-- Structured Human-Machine Interaction Logs (Carrera-Rivera et al., 2023).
-- Continuous Kinematics (Leiva and Arapakis, 2020).
-- High-Volume Trajectories (Mendeley Mouse Dynamics, 2026).
+
 - AdSERP Search and Interaction Logs (Arapakis et al., 2025).
+- High-Volume Trajectories (Mendeley Mouse Dynamics, 2026).
+- Structured Human-Machine Interaction Logs (Carrera-Rivera et al., 2023).
+- Client-Side Action Paths (Ou et al., 2021).
+- Continuous Kinematics (Leiva and Arapakis, 2020).
 
 ## 2. References
 
