@@ -14,7 +14,7 @@ tags:
 
 # Dataset Card: Edge-Native Adaptive UI Behavioral Logs
 
-This repository stores aggregated behavioral interaction logs in raw and processed forms in the data storage parquet format.
+This repository stores aggregated behavioral interaction logs in raw and processed forms, primarily in the `.parquet` data storage format.
 These logs support research on edge-native adaptive user interfaces.
 
 ## 1. Hosted Data
