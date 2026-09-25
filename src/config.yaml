@@ -28,6 +28,7 @@ data:
 preprocessing:
   window_size_ms: 500
   stride_ms: 250
+  settlement_delay_ms: 250
   reference_viewport: [1920, 1080]
   core_features:
     - meanVelocity
