@@ -97,6 +97,7 @@ if PYARROW_AVAILABLE:
         ("dataset_id", pa.string()),
         ("session_id", pa.string()),
         ("user_id", pa.string()),
+        ("task_id", pa.string()),          # Nullable
         ("window_index", pa.int32()),
         ("window_start_ms", pa.int64()),
         ("window_end_ms", pa.int64()),
@@ -124,8 +125,25 @@ if PYARROW_AVAILABLE:
         ("target_label", pa.int64()),
         ("target_name", pa.string())
     ])
+
+    SEQUENCE_DATASET_SCHEMA = pa.schema([
+        ("dataset_id", pa.string()),
+        ("session_id", pa.string()),
+        ("user_id", pa.string()),
+        ("task_id", pa.string()),
+        ("anchor_window_id", pa.int32()),
+        ("source_window_ids", pa.list_(pa.int32())),
+        ("window_start_ms", pa.int64()),
+        ("window_end_ms", pa.int64()),
+        ("lookahead_start_ms", pa.int64()),
+        ("lookahead_end_ms", pa.int64()),
+        ("target_label", pa.int64()),
+        ("target_name", pa.string()),
+        ("sequence_tensor", pa.list_(pa.list_(pa.float32())))
+    ])
 else:
     MICROTENSOR_SCHEMA = None
+    SEQUENCE_DATASET_SCHEMA = None
 
 
 def extract_microtensors_from_canonical(
@@ -233,10 +251,13 @@ def extract_microtensors_from_canonical(
                         session_terminated=session_terminated
                     )
 
+                    window_task_id = window_evs[0].get("task_id") or window_evs[0].get("taskId") or window_evs[0].get("trial_id") or ""
+
                     row_dict: Dict[str, Any] = {
                         "dataset_id": dataset_id,
                         "session_id": str(session_id),
                         "user_id": str(user_id),
+                        "task_id": str(window_task_id) if window_task_id else None,
                         "window_index": int(window_idx),
                         "window_start_ms": int(t_curr),
                         "window_end_ms": int(win_end)
@@ -355,10 +376,13 @@ def reconstruct_sequences_from_parquet(
     Returns:
         (sequences: np.ndarray [N, seq_len, 18], targets: np.ndarray [N])
     """
+    available_cols = set(pq.read_schema(parquet_path).names)
     cols_to_read = [
         "session_id", "user_id", "window_index", "window_start_ms",
         "target_label"
     ] + ALL_MICROTENSOR_COLUMNS
+    if "task_id" in available_cols:
+        cols_to_read.append("task_id")
 
     table = pq.read_table(parquet_path, columns=cols_to_read)
     df = table.to_pandas()
@@ -390,24 +414,27 @@ def reconstruct_sequences_from_parquet(
         return np.empty((0, seq_len, MICROTENSOR_DIM), dtype=np.float32), np.empty((0,), dtype=np.int64)
 
     # Sort deterministically
-    df = df.sort_values(["session_id", "window_index"]).reset_index(drop=True)
+    sort_cols = ["session_id", "task_id", "window_index"] if "task_id" in df.columns else ["session_id", "window_index"]
+    df = df.sort_values(sort_cols).reset_index(drop=True)
 
     feature_cols = ALL_MICROTENSOR_COLUMNS  # Exactly 18 columns
     feature_matrix = df[feature_cols].to_numpy(dtype=np.float32)
     target_vector = df["target_label"].to_numpy(dtype=np.int64)
     session_ids = df["session_id"].values
+    task_ids = df["task_id"].fillna("").astype(str).values if "task_id" in df.columns else np.array([""] * len(df))
     window_starts = df["window_start_ms"].values
 
     sequences: List[np.ndarray] = []
     targets: List[int] = []
 
-    # Segment by session boundary (and step gap if requested)
+    # Segment strictly by session boundary AND task boundary (and step gap if requested)
     sess_change = session_ids[:-1] != session_ids[1:]
+    task_change = task_ids[:-1] != task_ids[1:]
     if enforce_temporal_continuity:
         gap_break = np.diff(window_starts) > max_step_gap_ms
-        all_breaks = np.where(sess_change | gap_break)[0] + 1
+        all_breaks = np.where(sess_change | task_change | gap_break)[0] + 1
     else:
-        all_breaks = np.where(sess_change)[0] + 1
+        all_breaks = np.where(sess_change | task_change)[0] + 1
 
     slices = np.split(np.arange(len(df)), all_breaks)
 
@@ -428,16 +455,211 @@ def reconstruct_sequences_from_parquet(
     return X, Y
 
 
+def build_microtensor_sequence_dataset(
+    canonical_parquet_path: str,
+    output_parquet_path: Optional[str] = None,
+    seq_len: int = 8,
+    stride: int = 1,
+    window_size_ms: int = 500,
+    stride_ms: int = 250,
+    min_events_per_window: int = 3,
+    lookahead_min_ms: int = 500,
+    lookahead_max_ms: int = 1500,
+    force: bool = False
+) -> str:
+    """
+    Build a standalone MicroTensor sequence Parquet dataset conforming to Task 9.2.
+    For each valid anchor window, compiles:
+    - sequence_tensor: shape (seq_len, 18) float32
+    - anchor_window_id: terminal window index
+    - source_window_ids: ordered window indices
+    - lookahead_start_ms, lookahead_end_ms: window range for labelling
+    - Invariant: Zero cross-session and cross-task boundary leakage.
+    - Records sequence shape metadata: sequence length T, feature dimension 18, num_examples.
+    """
+    if not PYARROW_AVAILABLE or SEQUENCE_DATASET_SCHEMA is None:
+        raise RuntimeError("PyArrow is required for MicroTensor sequence dataset assembly.")
+
+    in_path = Path(canonical_parquet_path).resolve()
+    if not in_path.is_file():
+        raise FileNotFoundError(f"Source Parquet file not found: {in_path}")
+
+    if output_parquet_path is None:
+        root = find_project_root()
+        dataset_name = in_path.stem
+        out_path = root / ".data" / "interim" / "sequences" / f"{dataset_name}_sequences.parquet"
+    else:
+        out_path = Path(output_parquet_path).resolve()
+
+    if not force and out_path.is_file() and out_path.stat().st_size > 0:
+        print(f"[Sequence Assembler] Using cached sequence Parquet: {out_path}")
+        return str(out_path)
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Inspect source columns to determine if canonical events or windowed microtensors
+    table_meta = pq.read_schema(str(in_path))
+    in_cols = set(table_meta.names)
+
+    if "mean_velocity" in in_cols and "window_index" in in_cols:
+        # Already windowed MicroTensor Parquet
+        df_micro = pq.read_table(str(in_path)).to_pandas()
+    else:
+        # Canonical event Parquet -> extract windowed MicroTensors first
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False) as tmp_f:
+            tmp_micro_p = tmp_f.name
+        try:
+            extract_microtensors_from_canonical(
+                canonical_parquet_path=str(in_path),
+                output_parquet_path=tmp_micro_p,
+                window_size_ms=window_size_ms,
+                stride_ms=stride_ms,
+                min_events_per_window=min_events_per_window,
+                lookahead_min_ms=lookahead_min_ms,
+                lookahead_max_ms=lookahead_max_ms,
+                force=True
+            )
+            df_micro = pq.read_table(tmp_micro_p).to_pandas()
+        finally:
+            if os.path.exists(tmp_micro_p):
+                os.remove(tmp_micro_p)
+
+    if len(df_micro) == 0:
+        schema = SEQUENCE_DATASET_SCHEMA.with_metadata({
+            b"sequence_length": str(seq_len).encode("utf-8"),
+            b"feature_dim": b"18",
+            b"num_examples": b"0",
+            b"preprocessing_version": b"1.1.0",
+            b"feature_schema_version": b"1.1.0"
+        })
+        empty_tbl = pa.Table.from_pylist([], schema=schema)
+        pq.write_table(empty_tbl, str(out_path), compression="snappy")
+        return str(out_path)
+
+    if "task_id" not in df_micro.columns:
+        df_micro["task_id"] = ""
+    df_micro["task_id"] = df_micro["task_id"].fillna("").astype(str)
+    df_micro["session_id"] = df_micro["session_id"].astype(str)
+    df_micro["window_index"] = df_micro["window_index"].astype(int)
+
+    # Sort deterministically: ORDER BY session_id, task_id, window_index
+    df_micro = df_micro.sort_values(["session_id", "task_id", "window_index"]).reset_index(drop=True)
+
+    feature_cols = ALL_MICROTENSOR_COLUMNS  # Exactly 18 columns
+    feature_matrix = df_micro[feature_cols].to_numpy(dtype=np.float32)
+    session_ids = df_micro["session_id"].values
+    task_ids = df_micro["task_id"].values
+    window_indices = df_micro["window_index"].values
+    window_starts = df_micro["window_start_ms"].values
+    window_ends = df_micro["window_end_ms"].values
+    target_labels = df_micro["target_label"].values if "target_label" in df_micro.columns else np.zeros(len(df_micro), dtype=np.int64)
+    target_names = df_micro["target_name"].values if "target_name" in df_micro.columns else np.array(["NO_OUTCOME"] * len(df_micro))
+    dataset_ids = df_micro["dataset_id"].values if "dataset_id" in df_micro.columns else np.array(["unknown"] * len(df_micro))
+    user_ids = df_micro["user_id"].values if "user_id" in df_micro.columns else session_ids
+
+    # Segment strictly by session boundary AND task boundary (no cross-session, no cross-task sequence)
+    sess_change = session_ids[:-1] != session_ids[1:]
+    task_change = task_ids[:-1] != task_ids[1:]
+    all_breaks = np.where(sess_change | task_change)[0] + 1
+    slices = np.split(np.arange(len(df_micro)), all_breaks)
+
+    sequence_rows: List[Dict[str, Any]] = []
+
+    for idx_slice in slices:
+        if len(idx_slice) >= seq_len:
+            for s in range(0, len(idx_slice) - seq_len + 1, stride):
+                sub_indices = idx_slice[s : s + seq_len]
+                anchor_idx = sub_indices[-1]
+                anchor_wid = int(window_indices[anchor_idx])
+                src_wids = [int(window_indices[i]) for i in sub_indices]
+
+                w_start = int(window_starts[sub_indices[0]])
+                w_end = int(window_ends[anchor_idx])
+                lookahead_start = int(w_end + lookahead_min_ms)
+                lookahead_end = int(w_end + lookahead_max_ms)
+
+                # Extract (seq_len, 18) list
+                seq_tensor = feature_matrix[sub_indices].tolist()
+
+                sequence_rows.append({
+                    "dataset_id": str(dataset_ids[anchor_idx]),
+                    "session_id": str(session_ids[anchor_idx]),
+                    "user_id": str(user_ids[anchor_idx]),
+                    "task_id": str(task_ids[anchor_idx]) if task_ids[anchor_idx] else None,
+                    "anchor_window_id": anchor_wid,
+                    "source_window_ids": src_wids,
+                    "window_start_ms": w_start,
+                    "window_end_ms": w_end,
+                    "lookahead_start_ms": lookahead_start,
+                    "lookahead_end_ms": lookahead_end,
+                    "target_label": int(target_labels[anchor_idx]),
+                    "target_name": str(target_names[anchor_idx]),
+                    "sequence_tensor": seq_tensor
+                })
+
+    custom_meta = {
+        b"sequence_length": str(seq_len).encode("utf-8"),
+        b"feature_dim": b"18",
+        b"num_examples": str(len(sequence_rows)).encode("utf-8"),
+        b"preprocessing_version": b"1.1.0",
+        b"feature_schema_version": b"1.1.0"
+    }
+    schema = SEQUENCE_DATASET_SCHEMA.with_metadata(custom_meta)
+    table = pa.Table.from_pylist(sequence_rows, schema=schema)
+    pq.write_table(table, str(out_path), compression="snappy")
+
+    print(
+        f"[Sequence Assembler] Successfully wrote {len(sequence_rows)} sequence examples "
+        f"(T={seq_len}, D=18) to {out_path} ({out_path.stat().st_size / 1024 / 1024:.2f} MB)"
+    )
+    return str(out_path)
+
+
+def load_sequences_from_parquet(
+    parquet_path: str
+) -> Tuple[np.ndarray, np.ndarray, Dict[str, Any]]:
+    """
+    Load pre-assembled sequence dataset from Parquet into model-ready tensors.
+    Returns:
+        (X: np.ndarray [N, seq_len, 18], Y: np.ndarray [N], metadata: Dict[str, Any])
+    """
+    table = pq.read_table(parquet_path)
+    seq_list = table["sequence_tensor"].to_pylist()
+    meta: Dict[str, Any] = {}
+    if table.schema.metadata:
+        meta = {k.decode("utf-8"): v.decode("utf-8") for k, v in table.schema.metadata.items()}
+
+    if not seq_list:
+        seq_len = int(meta.get("sequence_length", 8))
+        return np.empty((0, seq_len, MICROTENSOR_DIM), dtype=np.float32), np.empty((0,), dtype=np.int64), meta
+
+    X = np.array(seq_list, dtype=np.float32)
+    Y = np.array(table["target_label"].to_pylist(), dtype=np.int64)
+    return X, Y, meta
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Edge-AUI MicroTensor Parquet Extraction Driver")
     parser.add_argument("--canonical-path", type=str, default=".data/canonical/adserp/data.parquet", help="Path to canonical event Parquet")
-    parser.add_argument("--output-path", type=str, default=".data/interim/microtensors/adserp_microtensors.parquet", help="Path to save MicroTensor Parquet")
+    parser.add_argument("--output-path", type=str, default=".data/interim/microtensors/adserp_microtensors.parquet", help="Path to save output Parquet")
+    parser.add_argument("--sequences", action="store_true", help="Assemble into sequence dataset")
+    parser.add_argument("--seq-len", type=int, default=8, help="Sequence length T (default: 8)")
     parser.add_argument("--force", action="store_true", help="Force re-extraction")
     args = parser.parse_args()
 
-    extract_microtensors_from_canonical(
-        canonical_parquet_path=args.canonical_path,
-        output_parquet_path=args.output_path,
-        force=args.force
-    )
+    if args.sequences:
+        out = build_microtensor_sequence_dataset(
+            canonical_parquet_path=args.canonical_path,
+            output_parquet_path=args.output_path,
+            seq_len=args.seq_len,
+            force=args.force
+        )
+        print(f"[MicroTensor Store] Sequence dataset ready at: {out}")
+    else:
+        extract_microtensors_from_canonical(
+            canonical_parquet_path=args.canonical_path,
+            output_parquet_path=args.output_path,
+            force=args.force
+        )
