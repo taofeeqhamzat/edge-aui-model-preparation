@@ -56,7 +56,24 @@ if PYARROW_AVAILABLE:
         ("duration_ms", pa.float32()),     # Nullable
         ("angle_deg", pa.float32()),       # Nullable
         ("distance_px", pa.float32()),     # Nullable
-        ("velocity_px_s", pa.float32())    # Nullable
+        ("velocity_px_s", pa.float32()),   # Nullable
+        # Task 9.1 Provenance & Correlation Extensions (ADR-004)
+        ("experiment_id", pa.string()),    # Nullable
+        ("condition_id", pa.string()),     # Nullable
+        ("task_id", pa.string()),          # Nullable
+        ("window_id", pa.int32()),         # Nullable
+        ("source_event_ids", pa.string()), # Nullable
+        ("preprocessing_version", pa.string()), # Nullable
+        ("feature_schema_version", pa.string()), # Nullable
+        # CamelCase aliases for exact acceptance criteria verification
+        ("sessionId", pa.string()),        # Nullable
+        ("experimentId", pa.string()),     # Nullable
+        ("conditionId", pa.string()),      # Nullable
+        ("taskId", pa.string()),           # Nullable
+        ("windowId", pa.int32()),          # Nullable
+        ("sourceEventIds", pa.string()),   # Nullable
+        ("preprocessingVersion", pa.string()), # Nullable
+        ("featureSchemaVersion", pa.string())  # Nullable
     ])
 else:
     CANONICAL_EVENT_SCHEMA = None
@@ -817,6 +834,10 @@ def convert_high_volume_trajectories_to_canonical(
                 "velocity_px_s": [float(v) if pd.notna(v) else None for v in velocities]
             }
 
+            for f in CANONICAL_EVENT_SCHEMA:
+                if f.name not in batch_dict:
+                    batch_dict[f.name] = [None] * len(chunk)
+
             table = pa.Table.from_pydict(batch_dict, schema=CANONICAL_EVENT_SCHEMA)
             writer.write_table(table)
             total_events += len(chunk)
@@ -873,10 +894,24 @@ if __name__ == "__main__":
     parser.add_argument("--max-sessions", type=int, default=None, help="Cap sessions for test run")
     parser.add_argument("--max-rows", type=int, default=None, help="Cap rows for HVT test run")
     parser.add_argument("--canonicalize", type=str, default=None, choices=["all", "adserp", "ck", "hvt"], help="Execute canonical Parquet conversion")
+    parser.add_argument("--ingest-traces", type=str, default=None, help="Directory containing exported JSON traces to ingest into canonical Parquet")
+    parser.add_argument("--output", type=str, default=None, help="Output path (or directory) for canonical Parquet")
     parser.add_argument("--force", action="store_true", help="Force re-conversion")
     args = parser.parse_args()
 
-    if args.canonicalize:
+    if args.ingest_traces:
+        try:
+            from trace_ingestion import ingest_trace_directory
+        except ImportError:
+            from src.trace_ingestion import ingest_trace_directory
+        out_p = args.output
+        if out_p and Path(out_p).is_dir():
+            out_p = str(Path(out_p) / "canonical_traces.parquet")
+        elif out_p and out_p.endswith(os.sep):
+            out_p = os.path.join(out_p, "canonical_traces.parquet")
+        res = ingest_trace_directory(args.ingest_traces, output_path=out_p, force=args.force)
+        print(f"[Data Driver] Canonical trace dataset ready at: {res}")
+    elif args.canonicalize:
         if args.canonicalize == "all":
             canonicalize_all_datasets(force=args.force)
         elif args.canonicalize == "adserp":
