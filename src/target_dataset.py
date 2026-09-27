@@ -60,6 +60,7 @@ try:
     )
     from target_generation import compute_class_weights
     from config import load_config
+    from data_manager import find_project_root
 except ImportError:
     from src.context_encoding import (
         CONTEXT_VECTOR_DIM,
@@ -80,6 +81,10 @@ except ImportError:
     )
     from src.target_generation import compute_class_weights
     from src.config import load_config
+    try:
+        from src.data_manager import find_project_root
+    except ImportError:
+        find_project_root = lambda: Path(__file__).resolve().parent.parent
 
 
 TARGET_DATASET_SCHEMA = None
@@ -590,6 +595,165 @@ def print_split_report(split_summary: Dict[str, Any]) -> None:
     print("-" * 80)
     print("Claim Notice:        Labels are scripted policy outputs (ADR-013).")
     print("=" * 80)
+
+
+class TargetInterventionDataset(torch.utils.data.Dataset if TORCH_AVAILABLE else object):
+    """
+    PyTorch Dataset for target-domain intervention sequences (Phase D).
+    Yields (sequence, context, target_intervention_id) tuples:
+      - sequence: Tensor of shape (seq_len, 18), dtype float32
+      - context: Tensor of shape (6,), dtype float32
+      - target: Tensor of shape (), dtype long
+    Also exposes row metadata (session_id, task_id, anchor_window_id, target_outcome, etc.).
+    """
+    def __init__(
+        self,
+        sequences: Union[np.ndarray, "torch.Tensor", List[Any]],
+        contexts: Union[np.ndarray, "torch.Tensor", List[Any]],
+        targets: Union[np.ndarray, "torch.Tensor", List[int]],
+        metadata: Optional[List[Dict[str, Any]]] = None,
+    ):
+        if TORCH_AVAILABLE and torch is not None:
+            if torch.is_tensor(sequences):
+                self.sequences = sequences.float()
+            else:
+                self.sequences = torch.tensor(sequences, dtype=torch.float32)
+
+            if torch.is_tensor(contexts):
+                self.contexts = contexts.float()
+            else:
+                self.contexts = torch.tensor(contexts, dtype=torch.float32)
+
+            if torch.is_tensor(targets):
+                self.targets = targets.long()
+            else:
+                self.targets = torch.tensor(targets, dtype=torch.long)
+        else:
+            self.sequences = np.asarray(sequences, dtype=np.float32)
+            self.contexts = np.asarray(contexts, dtype=np.float32)
+            self.targets = np.asarray(targets, dtype=np.int64)
+
+        self.metadata = metadata or []
+        self.X = self.sequences
+        self.Y = self.targets
+
+        if len(self.sequences) != len(self.contexts) or len(self.sequences) != len(self.targets):
+            raise ValueError(
+                f"Dimension mismatch: sequences ({len(self.sequences)}), "
+                f"contexts ({len(self.contexts)}), targets ({len(self.targets)})"
+            )
+
+    def __len__(self) -> int:
+        return len(self.targets)
+
+    def __getitem__(self, idx: int) -> Tuple[Any, Any, Any]:
+        return self.sequences[idx], self.contexts[idx], self.targets[idx]
+
+    def get_metadata(self, idx: int) -> Dict[str, Any]:
+        """Return the provenance metadata dict for a specific example index."""
+        if 0 <= idx < len(self.metadata):
+            return self.metadata[idx]
+        return {}
+
+
+def load_intervention_dataset(
+    version: str = "v1.0.0",
+    split: str = "train",
+    data_dir: Optional[Union[str, Path]] = None,
+    parquet_path: Optional[Union[str, Path]] = None,
+) -> TargetInterventionDataset:
+    """
+    Loads target intervention sequences for a given split from versioned Parquet storage.
+
+    Parameters:
+      version: Dataset version identifier (e.g. 'v1.0.0').
+      split: Split partition to load ('train', 'val', 'test', or 'all').
+      data_dir: Optional project root or data directory override.
+      parquet_path: Optional direct path to target Parquet file.
+
+    Returns:
+      TargetInterventionDataset initialized with sequences, contexts, and targets.
+    """
+    if parquet_path is None:
+        root = Path(data_dir) if data_dir else Path(find_project_root())
+        parquet_path = root / ".data" / "processed" / version / "target_intervention_dataset.parquet"
+    else:
+        parquet_path = Path(parquet_path)
+
+    if not parquet_path.is_file():
+        raise FileNotFoundError(f"Target intervention dataset not found at: {parquet_path}")
+
+    if not PYARROW_AVAILABLE:
+        raise RuntimeError("PyArrow is required to read target intervention Parquet files.")
+
+    table = pq.read_table(str(parquet_path))
+    df = table.to_pandas()
+
+    if split != "all":
+        df = df[df["split"] == split]
+
+    if len(df) == 0:
+        empty_seq = torch.empty((0, 8, 18), dtype=torch.float32) if TORCH_AVAILABLE else np.empty((0, 8, 18), dtype=np.float32)
+        empty_ctx = torch.empty((0, 6), dtype=torch.float32) if TORCH_AVAILABLE else np.empty((0, 6), dtype=np.float32)
+        empty_tgt = torch.empty(0, dtype=torch.long) if TORCH_AVAILABLE else np.empty(0, dtype=np.int64)
+        return TargetInterventionDataset(empty_seq, empty_ctx, empty_tgt, metadata=[])
+
+    seq_raw = df["sequence"].values
+    ctx_raw = df["context_vector"].values
+    sequences = np.stack([np.stack(s) for s in seq_raw]).astype(np.float32)
+    contexts = np.stack(ctx_raw).astype(np.float32)
+    targets = np.array(df["target_intervention_id"].values, dtype=np.int64)
+
+    meta_cols = [
+        c for c in df.columns if c not in ("sequence", "context_vector", "target_intervention_id")
+    ]
+    metadata = df[meta_cols].to_dict(orient="records")
+
+    return TargetInterventionDataset(sequences, contexts, targets, metadata=metadata)
+
+
+def get_intervention_class_weights(
+    version: str = "v1.0.0",
+    data_dir: Optional[Union[str, Path]] = None,
+    manifest_path: Optional[Union[str, Path]] = None,
+    device: Optional[Union[str, Any]] = None,
+) -> Any:
+    """
+    Loads pre-computed training-partition class weights for the 5-class intervention vocabulary.
+    Derived exclusively on the training partition (Task 11.1).
+
+    Returns:
+      torch.Tensor of shape (5,) with float32 class weights.
+    """
+    if manifest_path is None:
+        root = Path(data_dir) if data_dir else Path(find_project_root())
+        manifest_path = root / ".data" / "processed" / version / "manifest.json"
+    else:
+        manifest_path = Path(manifest_path)
+
+    weights_list = []
+    if manifest_path.is_file():
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            manifest_data = json.load(f)
+        w_dict = manifest_data.get("class_weights", {}).get("weights", {})
+        num_classes = len(INTERVENTION_VOCABULARY)
+        weights_list = [w_dict.get(INTERVENTION_VOCABULARY[i], 1.0) for i in range(num_classes)]
+    else:
+        train_ds = load_intervention_dataset(version=version, split="train", data_dir=data_dir)
+        t_weights = compute_class_weights(
+            train_ds.targets,
+            num_classes=len(INTERVENTION_VOCABULARY),
+            smoothing_alpha=10.0,
+            allow_empty=True
+        )
+        weights_list = [float(w) for w in t_weights]
+
+    if TORCH_AVAILABLE and torch is not None:
+        tensor_w = torch.tensor(weights_list, dtype=torch.float32)
+        if device is not None:
+            tensor_w = tensor_w.to(device)
+        return tensor_w
+    return np.asarray(weights_list, dtype=np.float32)
 
 
 def main():

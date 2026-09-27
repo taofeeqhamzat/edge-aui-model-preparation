@@ -6,6 +6,7 @@ Foundational PyTorch training loop for the GRU model (Edge-AUI Framework).
 import os
 import sys
 import argparse
+from pathlib import Path
 from typing import Optional, Dict, Any, List, Union, Tuple
 import numpy as np
 import torch
@@ -42,7 +43,6 @@ try:
     )
 except ImportError:
     try:
-        # pyrefly: ignore [missing-import]
         from src.target_generation import (
             compute_class_weights,
             compute_class_weight_diagnostics,
@@ -52,6 +52,44 @@ except ImportError:
         compute_class_weights = None  # type: ignore
         compute_class_weight_diagnostics = None  # type: ignore
         OUTCOME_TAXONOMY = {}
+
+try:
+    from target_dataset import (
+        TargetInterventionDataset,
+        load_intervention_dataset,
+        get_intervention_class_weights,
+        INTERVENTION_VOCABULARY,
+        INTERVENTION_TO_ID,
+    )
+except ImportError:
+    try:
+        from src.target_dataset import (
+            TargetInterventionDataset,
+            load_intervention_dataset,
+            get_intervention_class_weights,
+            INTERVENTION_VOCABULARY,
+            INTERVENTION_TO_ID,
+        )
+    except ImportError:
+        TargetInterventionDataset = None  # type: ignore
+        load_intervention_dataset = None  # type: ignore
+        get_intervention_class_weights = None  # type: ignore
+        INTERVENTION_VOCABULARY = [
+            "simplify_options",
+            "highlight_primary_action",
+            "offer_assistance",
+            "expand_tooltip",
+            "no_op",
+        ]
+        INTERVENTION_TO_ID = {name: i for i, name in enumerate(INTERVENTION_VOCABULARY)}
+
+try:
+    from config import load_config
+except ImportError:
+    try:
+        from src.config import load_config
+    except ImportError:
+        load_config = lambda: {}
 
 # Default Configuration
 DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".data", "raw"))
@@ -840,8 +878,756 @@ def train_foundation_model(
     }
 
 
+def evaluate_intervention_majority_baseline(
+    train_dataset: Any,
+    eval_dataset: Any,
+    num_classes: int = 5,
+    class_vocabulary: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """
+    Evaluate majority-class baseline for the 5-class intervention vocabulary.
+    Training majority class is derived strictly on the training partition (Task 11.1).
+    """
+    vocab = class_vocabulary if class_vocabulary else INTERVENTION_VOCABULARY
+
+    if hasattr(train_dataset, "targets"):
+        t_raw = train_dataset.targets
+        train_y = t_raw.numpy() if hasattr(t_raw, "numpy") else np.asarray(t_raw)
+    elif hasattr(train_dataset, "Y"):
+        t_raw = train_dataset.Y
+        train_y = t_raw.numpy() if hasattr(t_raw, "numpy") else np.asarray(t_raw)
+    else:
+        train_y = np.asarray(train_dataset)
+
+    if hasattr(eval_dataset, "targets"):
+        e_raw = eval_dataset.targets
+        eval_y = e_raw.numpy() if hasattr(e_raw, "numpy") else np.asarray(e_raw)
+    elif hasattr(eval_dataset, "Y"):
+        e_raw = eval_dataset.Y
+        eval_y = e_raw.numpy() if hasattr(e_raw, "numpy") else np.asarray(e_raw)
+    else:
+        eval_y = np.asarray(eval_dataset)
+
+    train_counts = np.bincount(train_y, minlength=num_classes)
+    majority_class_id = int(np.argmax(train_counts))
+    majority_name = vocab[majority_class_id] if majority_class_id < len(vocab) else str(majority_class_id)
+
+    eval_n = len(eval_y)
+    if eval_n == 0:
+        return {"accuracy": 0.0, "macro_f1": 0.0, "weighted_f1": 0.0}
+
+    eval_counts = np.bincount(eval_y, minlength=num_classes)
+    correct = int(eval_counts[majority_class_id])
+    acc = float(correct / eval_n)
+
+    per_class_f1 = {}
+    f1_list = []
+    weighted_f1_sum = 0.0
+
+    for c in range(num_classes):
+        c_name = vocab[c] if c < len(vocab) else str(c)
+        support = int(eval_counts[c])
+        if c == majority_class_id:
+            tp = support
+            fp = eval_n - support
+            prec = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+            rec = 1.0 if support > 0 else 0.0
+            f1 = (2 * prec * rec / (prec + rec)) if (prec + rec) > 0 else 0.0
+        else:
+            f1 = 0.0
+
+        per_class_f1[c_name] = float(f1)
+        if support > 0:
+            f1_list.append(f1)
+            weighted_f1_sum += f1 * support
+
+    macro_f1 = float(np.mean(f1_list)) if f1_list else 0.0
+    weighted_f1 = float(weighted_f1_sum / eval_n) if eval_n > 0 else 0.0
+
+    return {
+        "majority_class_id": majority_class_id,
+        "majority_class_name": majority_name,
+        "accuracy": acc,
+        "macro_f1": macro_f1,
+        "weighted_f1": weighted_f1,
+        "per_class_f1": per_class_f1,
+        "support": {vocab[c] if c < len(vocab) else str(c): int(eval_counts[c]) for c in range(num_classes)},
+    }
+
+
+def evaluate_intervention_model(
+    model: nn.Module,
+    eval_dataset: Union[Any, DataLoader],
+    criterion: Optional[nn.Module] = None,
+    device: Optional[Union[str, torch.device]] = None,
+    batch_size: int = BATCH_SIZE,
+    num_classes: int = 5,
+    train_dataset: Optional[Any] = None,
+    class_vocabulary: Optional[List[str]] = None,
+    verbose: bool = True,
+) -> Dict[str, Any]:
+    """
+    Comprehensive multi-metric evaluation of TargetInterventionHead (Task 12.4).
+    Mandates UIContext vector conditioning and computes unweighted Macro-F1, Weighted-F1,
+    per-class metrics, confusion matrix, ranking diagnostics, and failure cases.
+    """
+    vocab = class_vocabulary if class_vocabulary else INTERVENTION_VOCABULARY
+    target_device = get_device(device) if device is None or isinstance(device, str) else device
+    model.eval()
+    model.to(target_device)
+
+    if isinstance(eval_dataset, DataLoader):
+        dataloader = eval_dataset
+        total_eval_samples = len(eval_dataset.dataset) if hasattr(eval_dataset, "dataset") else 0
+        ds_obj = eval_dataset.dataset if hasattr(eval_dataset, "dataset") else None
+    else:
+        dataloader = DataLoader(eval_dataset, batch_size=batch_size, shuffle=False)
+        total_eval_samples = len(eval_dataset)
+        ds_obj = eval_dataset
+
+    if total_eval_samples == 0:
+        return {
+            "eval_loss": 0.0,
+            "accuracy": 0.0,
+            "macro_f1": 0.0,
+            "weighted_f1": 0.0,
+            "per_class": {},
+            "confusion_matrix": [],
+            "ranking_diagnostics": compute_ranking_diagnostics(np.empty((0, num_classes)), np.empty(0)),
+            "majority_baseline": None,
+            "n_samples": 0,
+            "dominant_confusion_pairs": [],
+            "failure_cases": [],
+        }
+
+    total_loss = 0.0
+    total_samples = 0
+    all_logits_list = []
+    all_targets_list = []
+    sample_contexts_list = []
+
+    with torch.no_grad():
+        for batch in dataloader:
+            if len(batch) == 3:
+                batch_x, batch_ctx, batch_y = batch
+            else:
+                raise ValueError(f"Expected (sequence, context, target) tuple from dataloader, got {len(batch)} items.")
+
+            batch_x = batch_x.to(target_device)
+            batch_ctx = batch_ctx.to(target_device)
+            batch_y = batch_y.to(target_device)
+
+            outputs = model(batch_x, context=batch_ctx)
+            if criterion is not None:
+                loss = criterion(outputs, batch_y)
+                total_loss += loss.item() * batch_x.size(0)
+
+            total_samples += batch_y.size(0)
+            all_logits_list.append(outputs.detach().cpu().numpy())
+            all_targets_list.append(batch_y.detach().cpu().numpy())
+            sample_contexts_list.append(batch_ctx.detach().cpu().numpy())
+
+    logits_arr = np.concatenate(all_logits_list, axis=0)
+    targets_arr = np.concatenate(all_targets_list, axis=0)
+    contexts_arr = np.concatenate(sample_contexts_list, axis=0)
+    preds_arr = np.argmax(logits_arr, axis=1)
+
+    avg_loss = total_loss / max(total_samples, 1) if criterion is not None else 0.0
+    accuracy = float(np.mean(preds_arr == targets_arr)) * 100.0
+
+    # Empirical Confusion Matrix
+    cm = np.zeros((num_classes, num_classes), dtype=int)
+    for t, p in zip(targets_arr, preds_arr):
+        if 0 <= t < num_classes and 0 <= p < num_classes:
+            cm[t, p] += 1
+
+    # Per-Class Precision, Recall, F1, Support
+    per_class_metrics = {}
+    f1_list = []
+    f1_all_list = []
+    weighted_f1_sum = 0.0
+
+    for c in range(num_classes):
+        c_name = vocab[c] if c < len(vocab) else str(c)
+        tp = int(cm[c, c])
+        fp = int(np.sum(cm[:, c]) - tp)
+        fn = int(np.sum(cm[c, :]) - tp)
+        support = int(np.sum(cm[c, :]))
+
+        prec = float(tp / (tp + fp)) if (tp + fp) > 0 else 0.0
+        rec = float(tp / (tp + fn)) if (tp + fn) > 0 else 0.0
+        f1 = float(2 * prec * rec / (prec + rec)) if (prec + rec) > 0 else 0.0
+
+        per_class_metrics[c_name] = {
+            "class_id": c,
+            "precision": prec,
+            "recall": rec,
+            "f1": f1,
+            "support": support,
+        }
+        f1_all_list.append(f1)
+        if support > 0:
+            f1_list.append(f1)
+            weighted_f1_sum += f1 * support
+
+    macro_f1 = float(np.mean(f1_list)) if f1_list else 0.0
+    macro_f1_all = float(np.mean(f1_all_list)) if f1_all_list else 0.0
+    weighted_f1 = float(weighted_f1_sum / total_samples) if total_samples > 0 else 0.0
+
+    # Secondary Ranking Diagnostics (HR@1, HR@3, MRR)
+    ranking_diagnostics = compute_ranking_diagnostics(logits_arr, targets_arr, ks=(1, 3))
+
+    # Majority Baseline Comparison
+    baseline_metrics = None
+    if train_dataset is not None:
+        baseline_metrics = evaluate_intervention_majority_baseline(
+            train_dataset=train_dataset,
+            eval_dataset=targets_arr,
+            num_classes=num_classes,
+            class_vocabulary=vocab,
+        )
+
+    # Failure Cases and Dominant Confusion Pairs Analysis (Brief §10)
+    confusion_pairs = {}
+    failure_cases = []
+    probs_arr = np.exp(logits_arr - np.max(logits_arr, axis=1, keepdims=True))
+    probs_arr = probs_arr / np.sum(probs_arr, axis=1, keepdims=True)
+
+    for i in range(total_samples):
+        t_i = int(targets_arr[i])
+        p_i = int(preds_arr[i])
+        if t_i != p_i:
+            t_name = vocab[t_i] if t_i < len(vocab) else str(t_i)
+            p_name = vocab[p_i] if p_i < len(vocab) else str(p_i)
+            pair_key = (t_name, p_name)
+            confusion_pairs[pair_key] = confusion_pairs.get(pair_key, 0) + 1
+
+            meta = ds_obj.get_metadata(i) if hasattr(ds_obj, "get_metadata") else {}
+            failure_cases.append({
+                "sample_index": i,
+                "true_class": t_name,
+                "true_class_id": t_i,
+                "pred_class": p_name,
+                "pred_class_id": p_i,
+                "confidence": float(probs_arr[i, p_i]),
+                "context_vector": contexts_arr[i].tolist(),
+                "session_id": meta.get("session_id", "unknown"),
+                "task_id": meta.get("task_id", "unknown"),
+                "anchor_window_id": meta.get("anchor_window_id", -1),
+                "target_outcome": meta.get("target_outcome", "unknown"),
+            })
+
+    sorted_confusion_pairs = sorted(
+        [{"true_class": k[0], "pred_class": k[1], "count": v} for k, v in confusion_pairs.items()],
+        key=lambda x: x["count"],
+        reverse=True,
+    )
+
+    if verbose:
+        print("\n" + "=" * 80)
+        print("          TARGET-DOMAIN INTERVENTION HEAD EVALUATION REPORT")
+        print("=" * 80)
+        print(f"{'Intervention Class':<28} {'ID':<5} {'Precision':<12} {'Recall':<12} {'F1-Score':<12} {'Support':<8}")
+        print("-" * 80)
+        for c_name, m in per_class_metrics.items():
+            print(f"{c_name:<28} {m['class_id']:<5} {m['precision']:<12.4f} {m['recall']:<12.4f} {m['f1']:<12.4f} {m['support']:<8}")
+        print("-" * 80)
+        print(f"Overall Accuracy:       {accuracy:.2f}% ({int(np.sum(preds_arr == targets_arr))}/{total_samples})")
+        print(f"Macro-F1 (Supported):   {macro_f1:.4f}  (Primary unweighted criterion across supported classes)")
+        print(f"Macro-F1 (All 5 Cls):   {macro_f1_all:.4f}")
+        print(f"Weighted-F1:            {weighted_f1:.4f}")
+        if criterion is not None:
+            print(f"Evaluation Loss:        {avg_loss:.4f}")
+
+        print("\n[Secondary Ranking Diagnostics (Relative Outcome Ordering)]")
+        print(f" - Hit Rate @ 1 (HR@1):           {ranking_diagnostics['hr@1'] * 100:.2f}%")
+        print(f" - Hit Rate @ 3 (HR@3):           {ranking_diagnostics['hr@3'] * 100:.2f}%")
+        print(f" - Mean Reciprocal Rank (MRR):     {ranking_diagnostics['mrr']:.4f}")
+
+        if baseline_metrics is not None:
+            print("\n[Majority-Class Baseline Delta Comparison]")
+            print(f" - Majority Class:                {baseline_metrics['majority_class_name']} (ID {baseline_metrics['majority_class_id']})")
+            print(f" - Baseline Accuracy:             {baseline_metrics['accuracy'] * 100:.2f}%")
+            print(f" - Baseline Macro-F1:             {baseline_metrics['macro_f1']:.4f}")
+            delta_macro = macro_f1 - baseline_metrics['macro_f1']
+            print(f" - Model Macro-F1 vs Baseline:    {macro_f1:.4f} vs {baseline_metrics['macro_f1']:.4f} (Delta: {'+' if delta_macro >= 0 else ''}{delta_macro:.4f})")
+
+        print(f"\n[Dominant Confusion Pairs ({len(failure_cases)} total misclassifications)]")
+        for cp in sorted_confusion_pairs[:5]:
+            print(f" - {cp['true_class']} -> predicted as {cp['pred_class']}: {cp['count']} occurrences")
+        print("=" * 80 + "\n")
+
+    return {
+        "eval_loss": float(avg_loss),
+        "accuracy": float(accuracy),
+        "macro_f1": float(macro_f1),
+        "macro_f1_all": float(macro_f1_all),
+        "weighted_f1": float(weighted_f1),
+        "per_class": per_class_metrics,
+        "confusion_matrix": cm.tolist(),
+        "ranking_diagnostics": ranking_diagnostics,
+        "majority_baseline": baseline_metrics,
+        "dominant_confusion_pairs": sorted_confusion_pairs,
+        "failure_cases": failure_cases,
+        "n_samples": int(total_samples),
+    }
+
+
+def evaluate_intervention_retention(
+    fine_tuned_model: EdgeAUIGRU,
+    foundation_checkpoint: str = "models/foundational_gru.pth",
+    device: Optional[Union[str, torch.device]] = None,
+    max_sequences: int = 100,
+    verbose: bool = True,
+) -> Dict[str, Any]:
+    """
+    Empirically evaluate foundation outcome representation retention after GRU fine-tuning (Task 12.3).
+    Compares outcome classification metrics before and after backbone modification to monitor
+    catastrophic forgetting (Brief §12).
+    """
+    target_device = get_device(device) if device is None or isinstance(device, str) else device
+    root = Path(find_project_root())
+    ckpt_path = root / foundation_checkpoint if not os.path.isabs(foundation_checkpoint) else Path(foundation_checkpoint)
+
+    if not ckpt_path.is_file():
+        if verbose:
+            print(f"[Retention Check] Warning: Foundation checkpoint not found at {ckpt_path}. Skipping retention evaluation.")
+        return {
+            "retention_evaluated": False,
+            "status": "Not measured (foundation checkpoint missing)",
+        }
+
+    try:
+        val_dataset = load_foundation_dataset(split="val", max_sequences=max_sequences)
+    except Exception as e:
+        if verbose:
+            print(f"[Retention Check] Notice: Could not load foundation validation split ({e}).")
+        return {
+            "retention_evaluated": False,
+            "status": f"Not measured ({e})",
+        }
+
+    # 1. Baseline Pre-trained Foundation Model
+    baseline_model = EdgeAUIGRU(
+        input_dim=MICROTENSOR_DIM,
+        hidden_dim=HIDDEN_DIM,
+        num_layers=NUM_LAYERS,
+        num_classes=NUM_CLASSES,
+    ).to(target_device)
+    baseline_ckpt = torch.load(str(ckpt_path), map_location="cpu", weights_only=True)
+    baseline_model.load_state_dict(baseline_ckpt)
+
+    pre_eval = evaluate_foundation_model(
+        model=baseline_model,
+        eval_dataset=val_dataset,
+        device=target_device,
+        num_classes=NUM_CLASSES,
+        verbose=False,
+    )
+
+    # 2. Test Model: Fine-tuned GRU Backbone + Pre-trained Foundation Outcome Head
+    test_model = EdgeAUIGRU(
+        input_dim=MICROTENSOR_DIM,
+        hidden_dim=HIDDEN_DIM,
+        num_layers=NUM_LAYERS,
+        num_classes=NUM_CLASSES,
+    ).to(target_device)
+
+    # Copy fine-tuned backbone weights
+    test_model.gru.load_state_dict(fine_tuned_model.gru.state_dict())
+    # Copy pre-trained outcome head weights
+    test_model.head.load_state_dict(baseline_model.head.state_dict())
+
+    post_eval = evaluate_foundation_model(
+        model=test_model,
+        eval_dataset=val_dataset,
+        device=target_device,
+        num_classes=NUM_CLASSES,
+        verbose=False,
+    )
+
+    pre_macro = pre_eval["macro_f1"]
+    post_macro = post_eval["macro_f1"]
+    delta_macro = post_macro - pre_macro
+    relative_drop = (pre_macro - post_macro) / max(pre_macro, 1e-6) * 100.0 if pre_macro > 0 else 0.0
+    retention_passed = relative_drop <= 15.0
+
+    if verbose:
+        print("\n" + "=" * 80)
+        print("    CATASTROPHIC FORGETTING / FOUNDATION RETENTION AUDIT REPORT")
+        print("=" * 80)
+        print(f"Pre-Fine-Tuning Foundation Macro-F1:   {pre_macro:.4f} (Accuracy: {pre_eval['accuracy']:.2f}%)")
+        print(f"Post-Fine-Tuning Foundation Macro-F1:  {post_macro:.4f} (Accuracy: {post_eval['accuracy']:.2f}%)")
+        print(f"Retention Delta (Macro-F1):           {'+' if delta_macro >= 0 else ''}{delta_macro:.4f}")
+        print(f"Relative Representation Degradation:  {relative_drop:.1f}%")
+        print(f"Retention Threshold (<= 15% drop):     {'PASSED' if retention_passed else 'FLAGGED (Significant Drift)'}")
+        print("=" * 80 + "\n")
+
+    return {
+        "retention_evaluated": True,
+        "pre_finetune_macro_f1": float(pre_macro),
+        "post_finetune_macro_f1": float(post_macro),
+        "delta_macro_f1": float(delta_macro),
+        "relative_drop_pct": float(relative_drop),
+        "pre_finetune_accuracy": float(pre_eval["accuracy"]),
+        "post_finetune_accuracy": float(post_eval["accuracy"]),
+        "retention_passed": bool(retention_passed),
+        "n_samples": int(len(val_dataset)),
+    }
+
+
+def train_intervention_model(
+    experiment: str = "e1",
+    dataset_version: str = "v1.0.0",
+    foundation_checkpoint: str = "models/foundational_gru.pth",
+    seed: int = 42,
+    epochs: int = EPOCHS,
+    batch_size: int = BATCH_SIZE,
+    device: Optional[str] = None,
+    output_dir: Optional[str] = None,
+    verbose: bool = True,
+    evaluate_val: bool = True,
+) -> Dict[str, Any]:
+    """
+    Main training loop for TargetInterventionHead progressive transfer ablations (Phase D).
+    Implements:
+      - Experiment E1 (Task 12.1): Strict Freezing (Frozen Backbone + Trained Head)
+      - Experiment E2 (Task 12.2): Partial Fine-Tuning (Unfrozen Terminal Layer + Head)
+      - Experiment E3 (Task 12.3): Full Fine-Tuning (All Layers Trainable + Retention Audit)
+    """
+    experiment = experiment.lower()
+    if experiment not in ("e1", "e2", "e3"):
+        raise ValueError(f"Unknown experiment: '{experiment}'. Expected 'e1', 'e2', or 'e3'.")
+
+    # Set deterministic random seed
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+    target_device = get_device(device)
+    root = Path(find_project_root())
+    cfg = load_config()
+
+    # Extract learning rates supporting both PipelineConfig dataclass and raw dict
+    if hasattr(cfg, "ablation"):
+        e1_head_lr = float(getattr(cfg.ablation, "strict_freezing_head_lr", 0.001))
+        e2_gru_lr = float(getattr(cfg.ablation, "partial_gru_lr", 0.0001))
+        e2_head_lr = float(getattr(cfg.ablation, "partial_head_lr", 0.001))
+        e3_full_lr = float(getattr(cfg.ablation, "full_lr", 0.0005))
+    elif isinstance(cfg, dict):
+        ab_cfg = cfg.get("ablation", {})
+        e1_head_lr = float(ab_cfg.get("strict_freezing", {}).get("head_lr", 0.001))
+        e2_gru_lr = float(ab_cfg.get("partial_finetuning", {}).get("gru_lr", 0.0001))
+        e2_head_lr = float(ab_cfg.get("partial_finetuning", {}).get("head_lr", 0.001))
+        e3_full_lr = float(ab_cfg.get("full_finetuning", {}).get("lr", 0.0005))
+    else:
+        e1_head_lr = 0.001
+        e2_gru_lr = 0.0001
+        e2_head_lr = 0.001
+        e3_full_lr = 0.0005
+
+    if verbose:
+        print("=" * 80)
+        print(f"      STARTING INTERVENTION HEAD TRAINING: EXPERIMENT {experiment.upper()}")
+        print(f"      Dataset Version: {dataset_version} | Seed: {seed} | Device: {target_device}")
+        print("=" * 80)
+
+    # 1. Load Datasets from versioned Parquet
+    train_dataset = load_intervention_dataset(version=dataset_version, split="train")
+    val_dataset = load_intervention_dataset(version=dataset_version, split="val") if evaluate_val else None
+
+    if len(train_dataset) == 0:
+        raise RuntimeError(f"Train dataset partition in {dataset_version} is empty.")
+
+    # 2. Ingest pre-resolved class weights (derived on training partition strictly)
+    weights_tensor = get_intervention_class_weights(
+        version=dataset_version,
+        device=target_device,
+    )
+
+    # 3. Instantiate Architecture and Load Foundation Backbone
+    head = TargetInterventionHead(hidden_dim=HIDDEN_DIM, context_dim=6, num_classes=5)
+    model = EdgeAUIGRU(
+        input_dim=MICROTENSOR_DIM,
+        hidden_dim=HIDDEN_DIM,
+        num_layers=NUM_LAYERS,
+        num_classes=5,
+        head=head,
+    ).to(target_device)
+
+    # Load foundation backbone weights
+    ckpt_path = root / foundation_checkpoint if not os.path.isabs(foundation_checkpoint) else Path(foundation_checkpoint)
+    if not ckpt_path.is_file():
+        raise FileNotFoundError(f"Required foundation checkpoint not found: {ckpt_path}")
+
+    base_ckpt = torch.load(str(ckpt_path), map_location="cpu", weights_only=True)
+    gru_dict = {k: v for k, v in base_ckpt.items() if k.startswith("gru.")}
+    model.load_state_dict(gru_dict, strict=False)
+
+    # 4. Configure Layer Freezing & Optimizers per Experiment Specification
+    optimizer: optim.Optimizer
+    lr_info: Dict[str, Any] = {}
+
+    if experiment == "e1":
+        # Strict Freezing: Freeze all GRU backbone parameters
+        model.freeze_backbone()
+        optimizer = optim.Adam(model.head_parameters(), lr=e1_head_lr)
+        lr_info = {"scheme": "strict_freezing", "backbone_frozen": True, "head_lr": e1_head_lr}
+        if verbose:
+            print(f"[Experiment E1] Backbone strictly frozen. Trainable parameters: Head only (lr={e1_head_lr}).")
+
+    elif experiment == "e2":
+        # Partial Fine-Tuning: Freeze lower GRU layers, unfreeze terminal GRU layer
+        model.unfreeze_terminal_layer()
+        term_idx = model.num_layers - 1
+        terminal_params = [p for name, p in model.gru.named_parameters() if f"_l{term_idx}" in name]
+        head_params = list(model.head_parameters())
+        optimizer = optim.Adam([
+            {"params": terminal_params, "lr": e2_gru_lr},
+            {"params": head_params, "lr": e2_head_lr},
+        ])
+        lr_info = {
+            "scheme": "partial_finetuning",
+            "backbone_terminal_layer": f"_l{term_idx}",
+            "gru_lr": e2_gru_lr,
+            "head_lr": e2_head_lr,
+            "terminal_params_count": sum(p.numel() for p in terminal_params),
+            "head_params_count": sum(p.numel() for p in head_params),
+        }
+        if verbose:
+            print(f"[Experiment E2] Terminal GRU layer and Head unfrozen. Differential LRs: gru_lr={e2_gru_lr}, head_lr={e2_head_lr}.")
+
+    elif experiment == "e3":
+        # Full Fine-Tuning: All parameters trainable with small lr
+        model.unfreeze_backbone()
+        optimizer = optim.Adam(model.parameters(), lr=e3_full_lr)
+        lr_info = {"scheme": "full_finetuning", "all_layers_trainable": True, "lr": e3_full_lr}
+        if verbose:
+            print(f"[Experiment E3] Full backbone + Head unfrozen. Uniform LR: lr={e3_full_lr}.")
+
+    criterion = nn.CrossEntropyLoss(weight=weights_tensor)
+    dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False) if val_dataset else None
+
+    history: Dict[str, List[float]] = {
+        "train_loss": [],
+        "train_accuracy": [],
+        "val_loss": [],
+        "val_accuracy": [],
+        "val_macro_f1": [],
+    }
+
+    # 5. Training Loop
+    for epoch in range(epochs):
+        model.train()
+        total_loss = 0.0
+        correct = 0
+        total = 0
+
+        for batch_x, batch_ctx, batch_y in dataloader:
+            batch_x = batch_x.to(target_device)
+            batch_ctx = batch_ctx.to(target_device)
+            batch_y = batch_y.to(target_device)
+
+            optimizer.zero_grad()
+            outputs = model(batch_x, context=batch_ctx)
+            loss = criterion(outputs, batch_y)
+            loss.backward()
+            optimizer.step()
+
+            total_loss += loss.item() * batch_x.size(0)
+            _, predicted = torch.max(outputs.data, 1)
+            total += batch_y.size(0)
+            correct += int((predicted == batch_y).sum().item())
+
+        epoch_loss = total_loss / max(total, 1)
+        epoch_acc = 100.0 * correct / max(total, 1)
+        history["train_loss"].append(epoch_loss)
+        history["train_accuracy"].append(epoch_acc)
+
+        if val_loader is not None and val_dataset is not None:
+            val_eval = evaluate_intervention_model(
+                model=model,
+                eval_dataset=val_loader,
+                criterion=criterion,
+                device=target_device,
+                num_classes=5,
+                train_dataset=train_dataset,
+                verbose=False,
+            )
+            history["val_loss"].append(val_eval["eval_loss"])
+            history["val_accuracy"].append(val_eval["accuracy"])
+            history["val_macro_f1"].append(val_eval["macro_f1"])
+
+            if verbose:
+                print(
+                    f"Epoch [{epoch+1}/{epochs}] - Train Loss: {epoch_loss:.4f}, Train Acc: {epoch_acc:.2f}% | "
+                    f"Val Loss: {val_eval['eval_loss']:.4f}, Val Acc: {val_eval['accuracy']:.2f}%, Val Macro-F1: {val_eval['macro_f1']:.4f}"
+                )
+        else:
+            if verbose:
+                print(f"Epoch [{epoch+1}/{epochs}] - Train Loss: {epoch_loss:.4f}, Train Acc: {epoch_acc:.2f}%")
+
+    # 6. Comprehensive Final Validation Evaluation
+    val_evaluation_results = None
+    if val_dataset is not None:
+        if verbose:
+            print(f"\n[Experiment {experiment.upper()}] Final Validation Split Evaluation:")
+        val_evaluation_results = evaluate_intervention_model(
+            model=model,
+            eval_dataset=val_dataset,
+            criterion=criterion,
+            device=target_device,
+            num_classes=5,
+            train_dataset=train_dataset,
+            verbose=verbose,
+        )
+
+    # 7. Retention Check for E3 (Catastrophic Forgetting Audit)
+    retention_diagnostics = None
+    if experiment == "e3":
+        if verbose:
+            print(f"[Experiment E3] Running Catastrophic Forgetting Retention Audit...")
+        retention_diagnostics = evaluate_intervention_retention(
+            fine_tuned_model=model,
+            foundation_checkpoint=foundation_checkpoint,
+            device=target_device,
+            verbose=verbose,
+        )
+
+    # 8. Save Checkpoint
+    models_dir = Path(output_dir) if output_dir else root / "models"
+    models_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint_file = models_dir / f"intervention_head_{experiment}.pth"
+    torch.save(model.state_dict(), str(checkpoint_file))
+
+    # Verify saved checkpoint
+    assert checkpoint_file.is_file(), f"Failed to save checkpoint to: {checkpoint_file}"
+    saved_state = torch.load(str(checkpoint_file), map_location="cpu", weights_only=True)
+    assert "gru.weight_ih_l0" in saved_state and "head.fc.0.weight" in saved_state
+
+    model_size_bytes = os.path.getsize(checkpoint_file)
+    if verbose:
+        print(f"[Training Complete] Checkpoint saved: {checkpoint_file} ({model_size_bytes / 1024:.1f} KB)")
+
+    return {
+        "experiment": experiment,
+        "dataset_version": dataset_version,
+        "seed": seed,
+        "lr_info": lr_info,
+        "model": model,
+        "checkpoint_path": str(checkpoint_file),
+        "model_size_bytes": model_size_bytes,
+        "history": history,
+        "train_samples": len(train_dataset),
+        "val_samples": len(val_dataset) if val_dataset else 0,
+        "val_evaluation": val_evaluation_results,
+        "retention_diagnostics": retention_diagnostics,
+        "device": str(target_device),
+    }
+
+
+def evaluate_intervention_suite(
+    dataset_version: str = "v1.0.0",
+    models_dir: str = "models",
+    device: Optional[str] = None,
+    output_markdown: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Evaluates E1, E2, and E3 on held-out test partition against the majority baseline (Task 12.4).
+    Produces directly comparable metrics table conforming to Brief §10 and §18.
+    """
+    target_device = get_device(device)
+    root = Path(find_project_root())
+    models_path = Path(models_dir) if os.path.isabs(models_dir) else root / models_dir
+
+    train_ds = load_intervention_dataset(version=dataset_version, split="train")
+    val_ds = load_intervention_dataset(version=dataset_version, split="val")
+    test_ds = load_intervention_dataset(version=dataset_version, split="test")
+
+    majority_val = evaluate_intervention_majority_baseline(train_ds, val_ds)
+    majority_test = evaluate_intervention_majority_baseline(train_ds, test_ds)
+
+    experiments = ["e1", "e2", "e3"]
+    results: Dict[str, Any] = {
+        "dataset_version": dataset_version,
+        "majority_baseline": {"val": majority_val, "test": majority_test},
+        "experiments": {},
+    }
+
+    for exp in experiments:
+        ckpt = models_path / f"intervention_head_{exp}.pth"
+        if not ckpt.is_file():
+            print(f"[Suite] Warning: Checkpoint {ckpt} not found. Run training for {exp} first.")
+            continue
+
+        head = TargetInterventionHead(hidden_dim=HIDDEN_DIM, context_dim=6, num_classes=5)
+        model = EdgeAUIGRU(
+            input_dim=MICROTENSOR_DIM,
+            hidden_dim=HIDDEN_DIM,
+            num_layers=NUM_LAYERS,
+            num_classes=5,
+            head=head,
+        ).to(target_device)
+        model.load_state_dict(torch.load(str(ckpt), map_location="cpu", weights_only=True))
+
+        val_eval = evaluate_intervention_model(
+            model=model,
+            eval_dataset=val_ds,
+            device=target_device,
+            train_dataset=train_ds,
+            verbose=False,
+        )
+        test_eval = evaluate_intervention_model(
+            model=model,
+            eval_dataset=test_ds,
+            device=target_device,
+            train_dataset=train_ds,
+            verbose=False,
+        )
+
+        results["experiments"][exp] = {
+            "checkpoint": str(ckpt),
+            "size_kb": os.path.getsize(ckpt) / 1024.0,
+            "val": val_eval,
+            "test": test_eval,
+        }
+
+    # Print Comparative Table
+    print("\n" + "=" * 96)
+    print("                PHASE D: PROGRESSIVE TRANSFER EXPERIMENTS COMPARATIVE REPORT")
+    print(f"                Dataset: {dataset_version} | Claim Boundary: ADR-013 (Scripted Testbed)")
+    print("=" * 96)
+    print(f"{'Experiment':<22} {'Val Macro-F1':<14} {'Val Acc (%)':<13} {'Test Macro-F1':<15} {'Test Acc (%)':<13} {'Size (KB)':<10}")
+    print("-" * 96)
+    print(
+        f"{'Majority Baseline':<22} "
+        f"{majority_val['macro_f1']:<14.4f} "
+        f"{majority_val['accuracy']*100:<13.1f} "
+        f"{majority_test['macro_f1']:<15.4f} "
+        f"{majority_test['accuracy']*100:<13.1f} "
+        f"{'-':<10}"
+    )
+
+    for exp in experiments:
+        if exp in results["experiments"]:
+            res = results["experiments"][exp]
+            print(
+                f"{'Exp ' + exp.upper():<22} "
+                f"{res['val']['macro_f1']:<14.4f} "
+                f"{res['val']['accuracy']:<13.1f} "
+                f"{res['test']['macro_f1']:<15.4f} "
+                f"{res['test']['accuracy']:<13.1f} "
+                f"{res['size_kb']:<10.1f}"
+            )
+    print("=" * 96 + "\n")
+
+    return results
+
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Foundational GRU Training for Edge-AUI Framework")
+    parser = argparse.ArgumentParser(description="Foundational and Target Intervention Training for Edge-AUI Framework")
     parser.add_argument("--data-dir", type=str, default=None, help="Path to raw dataset directory")
     parser.add_argument("--hf-repo", type=str, default="T40/edge-aui-framework-data", help="Hugging Face repo ID")
     parser.add_argument("--epochs", type=int, default=EPOCHS, help="Number of training epochs")
@@ -851,17 +1637,41 @@ if __name__ == "__main__":
     parser.add_argument("--device", type=str, default=None, help="Execution device (cuda/mps/cpu)")
     parser.add_argument("--output-dir", type=str, default=None, help="Directory to save checkpoints")
     parser.add_argument("--class-weights", type=str, default="smoothed", choices=["smoothed", "inverse", "none"], help="Class weighting scheme")
+
+    # Phase D CLI Options
+    parser.add_argument("--experiment", type=str, default=None, choices=["e1", "e2", "e3"], help="Run intervention head experiment (e1, e2, or e3)")
+    parser.add_argument("--dataset-version", type=str, default="v1.0.0", help="Dataset version identifier for intervention training")
+    parser.add_argument("--seed", type=int, default=42, help="Deterministic random seed")
+    parser.add_argument("--evaluate-suite", action="store_true", help="Evaluate E1, E2, E3 on test partition and print comparative table")
     args = parser.parse_args()
 
-    cw = None if args.class_weights == "none" else args.class_weights
-    train_foundation_model(
-        data_dir=args.data_dir,
-        hf_repo_id=args.hf_repo,
-        epochs=args.epochs,
-        batch_size=args.batch_size,
-        lr=args.lr,
-        max_sequences=args.max_sequences,
-        device=args.device,
-        output_dir=args.output_dir,
-        class_weights=cw
-    )
+    if args.evaluate_suite:
+        evaluate_intervention_suite(
+            dataset_version=args.dataset_version,
+            models_dir=args.output_dir or "models",
+            device=args.device,
+        )
+    elif args.experiment is not None:
+        train_intervention_model(
+            experiment=args.experiment,
+            dataset_version=args.dataset_version,
+            seed=args.seed,
+            epochs=args.epochs,
+            batch_size=args.batch_size,
+            device=args.device,
+            output_dir=args.output_dir,
+        )
+    else:
+        cw = None if args.class_weights == "none" else args.class_weights
+        train_foundation_model(
+            data_dir=args.data_dir,
+            hf_repo_id=args.hf_repo,
+            epochs=args.epochs,
+            batch_size=args.batch_size,
+            lr=args.lr,
+            max_sequences=args.max_sequences,
+            device=args.device,
+            output_dir=args.output_dir,
+            class_weights=cw,
+        )
+

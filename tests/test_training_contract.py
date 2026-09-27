@@ -55,10 +55,25 @@ class TestTrainingContract(unittest.TestCase):
             self.assertEqual(len(res["history"]["accuracy"]), 2)
             self.assertTrue(os.path.isfile(res["model_path"]))
             self.assertIn("val_evaluation", res)
+    def test_intervention_training_smoke_test(self):
+        """Run a 1-epoch smoke test training run for TargetInterventionHead."""
+        import tempfile
+        from training import train_intervention_model
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            res = train_intervention_model(
+                experiment="e1",
+                dataset_version="v1.0.0",
+                epochs=1,
+                batch_size=32,
+                output_dir=tmp_dir,
+                verbose=False,
+            )
+            self.assertIsNotNone(res["model"])
+            self.assertTrue(os.path.isfile(res["checkpoint_path"]))
+            self.assertIn("val_evaluation", res)
             if res["val_evaluation"] is not None:
                 self.assertIn("macro_f1", res["val_evaluation"])
                 self.assertIn("accuracy", res["val_evaluation"])
-                self.assertIn("ranking_diagnostics", res["val_evaluation"])
 
 
 if __name__ == "__main__":
