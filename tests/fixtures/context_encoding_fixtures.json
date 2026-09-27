@@ -1,0 +1,195 @@
+{
+  "version": "1.0.0",
+  "generatedAt": "2026-09-26T23:08:55.816Z",
+  "dimension": 6,
+  "routeVocabulary": [
+    "Overview",
+    "Analytics",
+    "Reports",
+    "Customers",
+    "Settings"
+  ],
+  "actionVocabulary": [
+    "click",
+    "change",
+    "toggle",
+    "hover",
+    "select",
+    "input",
+    "focus"
+  ],
+  "cases": [
+    {
+      "name": "standard_analytics_t1_step2",
+      "context": {
+        "route": "Analytics",
+        "activeComponentId": "filter-Region",
+        "componentRole": "accordion",
+        "taskId": "T1",
+        "taskStepId": "T1-2",
+        "availableActions": [
+          "click",
+          "change"
+        ],
+        "primaryActionAvailable": true,
+        "helpAvailable": true,
+        "expandable": true
+      },
+      "expectedVector": [
+        0.20000000298023224,
+        1,
+        1,
+        1,
+        0.25,
+        0.2857142984867096
+      ]
+    },
+    {
+      "name": "overview_idle_no_task",
+      "context": {
+        "route": "Overview",
+        "activeComponentId": "nav-Overview",
+        "componentRole": "navigation",
+        "availableActions": [
+          "click",
+          "hover"
+        ],
+        "primaryActionAvailable": false,
+        "helpAvailable": false,
+        "expandable": false
+      },
+      "expectedVector": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0.2857142984867096
+      ]
+    },
+    {
+      "name": "reports_t2_completed_step",
+      "context": {
+        "route": "Reports",
+        "activeComponentId": "btn-export",
+        "componentRole": "primary-action",
+        "taskId": "T2",
+        "taskStepId": "T2-2",
+        "availableActions": [
+          "click"
+        ],
+        "primaryActionAvailable": true,
+        "helpAvailable": false,
+        "expandable": false
+      },
+      "expectedVector": [
+        0.4000000059604645,
+        1,
+        0,
+        0,
+        0.5,
+        0.1428571492433548
+      ]
+    },
+    {
+      "name": "settings_t3_step4_full_actions",
+      "context": {
+        "route": "Settings",
+        "activeComponentId": "btn-apply-filters",
+        "componentRole": "submit-action",
+        "taskId": "T3",
+        "taskStepId": "T3-4",
+        "availableActions": [
+          "click",
+          "change",
+          "toggle",
+          "hover",
+          "select",
+          "input",
+          "focus"
+        ],
+        "primaryActionAvailable": true,
+        "helpAvailable": true,
+        "expandable": true
+      },
+      "expectedVector": [
+        0.800000011920929,
+        1,
+        1,
+        1,
+        0.75,
+        1
+      ]
+    },
+    {
+      "name": "unknown_route_with_duplicates",
+      "context": {
+        "route": "CustomDashboard",
+        "activeComponentId": "custom-widget",
+        "componentRole": "widget",
+        "taskId": "T1",
+        "taskStepId": "T1-1",
+        "availableActions": [
+          "click",
+          "click",
+          "hover"
+        ],
+        "primaryActionAvailable": false,
+        "helpAvailable": true,
+        "expandable": false
+      },
+      "expectedVector": [
+        0,
+        0,
+        1,
+        0,
+        0,
+        0.2857142984867096
+      ]
+    },
+    {
+      "name": "empty_actions_and_malformed_step",
+      "context": {
+        "route": "Customers",
+        "availableActions": [],
+        "taskId": "T1",
+        "taskStepId": "invalid-step-format",
+        "primaryActionAvailable": false,
+        "helpAvailable": false,
+        "expandable": true
+      },
+      "expectedVector": [
+        0.6000000238418579,
+        0,
+        0,
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "step_index_exceeding_max",
+      "context": {
+        "route": "Analytics",
+        "taskId": "T2",
+        "taskStepId": "T2-99",
+        "availableActions": [
+          "click",
+          "hover",
+          "focus"
+        ],
+        "primaryActionAvailable": true,
+        "helpAvailable": true,
+        "expandable": false
+      },
+      "expectedVector": [
+        0.20000000298023224,
+        1,
+        1,
+        0,
+        1,
+        0.4285714328289032
+      ]
+    }
+  ]
+}
