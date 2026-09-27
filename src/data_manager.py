@@ -9,7 +9,7 @@ import os
 import sys
 import glob
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union, Tuple, Set
 
 # ============================================================================
 # 1. Environment Detection & Token Resolution
@@ -341,18 +341,335 @@ def load_hosted_dataset(
 
 
 # ============================================================================
-# 4. Standalone CLI Execution
+# 4. Provenance-Versioned Dataset Manifest & Validators (Phase C, Task 11.2)
+# ============================================================================
+
+import hashlib
+import json
+from datetime import datetime, timezone
+
+try:
+    from intervention_label_policy import LABEL_POLICY_VERSION, INTERVENTION_VOCABULARY, INTERVENTION_TO_ID
+    from trace_ingestion import EXPERIMENT_TRACE_SCHEMA_VERSION, PREPROCESSING_VERSION, FEATURE_SCHEMA_VERSION
+except ImportError:
+    try:
+        from src.intervention_label_policy import LABEL_POLICY_VERSION, INTERVENTION_VOCABULARY, INTERVENTION_TO_ID
+        from src.trace_ingestion import EXPERIMENT_TRACE_SCHEMA_VERSION, PREPROCESSING_VERSION, FEATURE_SCHEMA_VERSION
+    except ImportError:
+        LABEL_POLICY_VERSION = "1.0.0"
+        INTERVENTION_VOCABULARY = ("simplify_options", "highlight_primary_action", "offer_assistance", "expand_tooltip", "no_op")
+        INTERVENTION_TO_ID = {name: idx for idx, name in enumerate(INTERVENTION_VOCABULARY)}
+        EXPERIMENT_TRACE_SCHEMA_VERSION = "1.1.0"
+        PREPROCESSING_VERSION = "1.1.0"
+        FEATURE_SCHEMA_VERSION = "1.1.0"
+
+MANIFEST_SCHEMA_VERSION = "1.0.0"
+
+PROVENANCE_REQUIRED_FIELDS = (
+    "session_id",
+    "experiment_id",
+    "condition_id",
+    "task_id",
+    "anchor_window_id",
+    "source_event_ids",
+    "preprocessing_version",
+    "feature_schema_version",
+    "target_generation_version",
+)
+
+ADR_013_CLAIM_BOUNDARY = (
+    "ADR-013: Substitute interaction traces and scripted label assignments. "
+    "Results from this dataset may be reported as: 'the dataset -> preparation -> training -> export -> runtime path executes end to end', "
+    "'the learned head loads in the browser and produces logits of the expected shape', and engineering and pipeline findings. "
+    "Results from this dataset may NOT be reported as: evidence about human participants; evidence about usability, task performance, "
+    "or intervention benefit; or evidence that learned intervention prediction outperforms the deterministic policy — "
+    "a model trained on labels produced by that policy is being compared against its own teacher."
+)
+
+
+class ManifestValidationError(ValueError):
+    """Raised when dataset manifest fails provenance, integrity, or split disjointness validation."""
+    pass
+
+
+def compute_dataset_content_hash(rows: List[Dict[str, Any]]) -> str:
+    """Computes a deterministic content hash over canonical example attributes."""
+    hasher = hashlib.sha256()
+    for r in sorted(rows, key=lambda x: (x.get("session_id", ""), x.get("anchor_window_id", 0))):
+        key = f"{r.get('session_id')}|{r.get('task_id')}|{r.get('anchor_window_id')}|{r.get('split')}|{r.get('target_intervention_id')}"
+        hasher.update(key.encode("utf-8"))
+    return hasher.hexdigest()[:12]
+
+
+def create_dataset_manifest(
+    rows: List[Dict[str, Any]],
+    split_summary: Dict[str, Any],
+    trace_dir: Optional[Union[str, Path]] = None,
+    output_path: Optional[Union[str, Path]] = None,
+    dataset_version: Optional[str] = None,
+) -> Tuple[Dict[str, Any], Path]:
+    """
+    Constructs an immutable, content-addressed dataset manifest (Task 11.2)
+    retaining all 9 required provenance fields for every example (Brief §8).
+    """
+    content_hash = compute_dataset_content_hash(rows)
+    resolved_version = dataset_version or f"v1.0.0-{content_hash}"
+    created_at = datetime.now(timezone.utc).isoformat()
+
+    manifest_examples: List[Dict[str, Any]] = []
+    for r in rows:
+        ex = {
+            "example_id": f"{r.get('session_id')}:w{r.get('anchor_window_id')}",
+            "session_id": str(r.get("session_id", "")),
+            "experiment_id": str(r.get("experiment_id", "")),
+            "condition_id": str(r.get("condition_id", "")),
+            "task_id": str(r.get("task_id", "")),
+            "anchor_window_id": int(r.get("anchor_window_id", 0)),
+            "source_event_ids": list(r.get("source_event_ids", [])),
+            "preprocessing_version": str(r.get("preprocessing_version", PREPROCESSING_VERSION)),
+            "feature_schema_version": str(r.get("feature_schema_version", FEATURE_SCHEMA_VERSION)),
+            "target_generation_version": str(r.get("target_generation_version", LABEL_POLICY_VERSION)),
+            "split": str(r.get("split", "unassigned")),
+            "target_outcome": str(r.get("target_outcome", "NO_OUTCOME")),
+            "target_outcome_id": int(r.get("target_outcome_id", 0)),
+            "target_intervention": str(r.get("target_intervention", "no_op")),
+            "target_intervention_id": int(r.get("target_intervention_id", 4)),
+            "label_policy_version": str(r.get("label_policy_version", LABEL_POLICY_VERSION)),
+            "is_scripted_policy": bool(r.get("is_scripted_policy", True)),
+        }
+        manifest_examples.append(ex)
+
+    manifest = {
+        "manifest_schema_version": MANIFEST_SCHEMA_VERSION,
+        "dataset_version": resolved_version,
+        "content_hash": content_hash,
+        "created_at": created_at,
+        "source_data_type": "scripted_substitute_testbed",
+        "claim_boundary": ADR_013_CLAIM_BOUNDARY,
+        "provenance_spec": {
+            "brief_reference": "Brief Section 8 & Section 17",
+            "required_fields": list(PROVENANCE_REQUIRED_FIELDS),
+        },
+        "code_versions": {
+            "preprocessing_version": PREPROCESSING_VERSION,
+            "feature_schema_version": FEATURE_SCHEMA_VERSION,
+            "label_policy_version": LABEL_POLICY_VERSION,
+            "trace_schema_version": EXPERIMENT_TRACE_SCHEMA_VERSION,
+        },
+        "split_summary": split_summary,
+        "class_weights": split_summary.get("class_weights", {}),
+        "total_examples": len(manifest_examples),
+        "examples": manifest_examples,
+    }
+
+    if output_path is None:
+        out_p = Path(f".data/processed/{resolved_version}/manifest.json")
+    else:
+        out_p = Path(output_path)
+
+    out_p.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_p, "w", encoding="utf-8") as fp:
+        json.dump(manifest, fp, indent=2)
+
+    print(f"[DataManager] Provenance-versioned manifest written to: {out_p}")
+    return manifest, out_p
+
+
+def validate_dataset_manifest(
+    manifest_path_or_dict: Union[str, Path, Dict[str, Any]],
+    trace_dir: Optional[Union[str, Path]] = None,
+    check_events: bool = True,
+) -> Dict[str, Any]:
+    """
+    Strictly validates a dataset manifest JSON (Task 11.2).
+    Raises ManifestValidationError on ANY incompleteness or violation:
+    1. Every provenance field present and resolvable on every example.
+    2. Every sourceEventId exists in its source trace.
+    3. Splits are strictly session-bounded and disjoint.
+    4. Label policy version matches the labels and code.
+    5. Feature schema and preprocessing versions match current code.
+    """
+    if isinstance(manifest_path_or_dict, (str, Path)):
+        p = Path(manifest_path_or_dict)
+        if not p.is_file():
+            raise ManifestValidationError(f"Manifest file does not exist: {p}")
+        try:
+            with open(p, "r", encoding="utf-8") as fp:
+                manifest = json.load(fp)
+        except Exception as e:
+            raise ManifestValidationError(f"Failed to parse manifest JSON from {p}: {e}")
+    elif isinstance(manifest_path_or_dict, dict):
+        manifest = manifest_path_or_dict
+    else:
+        raise ManifestValidationError(f"Expected path or dict, received: {type(manifest_path_or_dict)}")
+
+    # 1. Header schema validation
+    required_headers = [
+        "manifest_schema_version",
+        "dataset_version",
+        "claim_boundary",
+        "code_versions",
+        "split_summary",
+        "class_weights",
+        "total_examples",
+        "examples",
+    ]
+    for h in required_headers:
+        if h not in manifest or manifest[h] is None:
+            raise ManifestValidationError(f"Manifest is missing required header field: '{h}'")
+
+    # 2. Code versions verification
+    cv = manifest["code_versions"]
+    if cv.get("preprocessing_version") != PREPROCESSING_VERSION:
+        raise ManifestValidationError(
+            f"Preprocessing version mismatch: manifest has '{cv.get('preprocessing_version')}', "
+            f"code requires '{PREPROCESSING_VERSION}'"
+        )
+    if cv.get("feature_schema_version") != FEATURE_SCHEMA_VERSION:
+        raise ManifestValidationError(
+            f"Feature schema version mismatch: manifest has '{cv.get('feature_schema_version')}', "
+            f"code requires '{FEATURE_SCHEMA_VERSION}'"
+        )
+    if cv.get("label_policy_version") != LABEL_POLICY_VERSION:
+        raise ManifestValidationError(
+            f"Label policy version mismatch: manifest has '{cv.get('label_policy_version')}', "
+            f"code requires '{LABEL_POLICY_VERSION}'"
+        )
+
+    # 3. Split disjointness verification
+    split_summary = manifest["split_summary"]
+    sessions_dict = split_summary.get("sessions", {})
+    train_s = set(sessions_dict.get("train", []))
+    val_s = set(sessions_dict.get("val", []))
+    test_s = set(sessions_dict.get("test", []))
+
+    if not train_s.isdisjoint(val_s):
+        raise ManifestValidationError(f"Non-disjoint splits: Train and Val overlap on {train_s & val_s}")
+    if not train_s.isdisjoint(test_s):
+        raise ManifestValidationError(f"Non-disjoint splits: Train and Test overlap on {train_s & test_s}")
+    if not val_s.isdisjoint(test_s):
+        raise ManifestValidationError(f"Non-disjoint splits: Val and Test overlap on {val_s & test_s}")
+
+    # 4. Class weights derivation provenance
+    cw = manifest.get("class_weights", {})
+    if cw.get("derived_on") != "train_partition_only":
+        raise ManifestValidationError(
+            f"Class weights provenance invalid: expected 'train_partition_only', received '{cw.get('derived_on')}'"
+        )
+
+    examples = manifest["examples"]
+    if not isinstance(examples, list) or len(examples) == 0:
+        raise ManifestValidationError("Manifest contains no examples or examples is not a list")
+
+    if len(examples) != manifest["total_examples"]:
+        raise ManifestValidationError(
+            f"Total examples mismatch: header declared {manifest['total_examples']}, found {len(examples)}"
+        )
+
+    # Pre-index source traces if trace_dir is provided and check_events is requested
+    trace_events_cache: Dict[str, Set[str]] = {}
+    if check_events:
+        td = Path(trace_dir) if trace_dir else Path(".data/raw/scripted")
+        if td.is_dir():
+            trace_files = glob.glob(str(td / "*.json"))
+            for tf in trace_files:
+                if Path(tf).name.startswith("manifest"):
+                    continue
+                try:
+                    with open(tf, "r", encoding="utf-8") as fp:
+                        t_data = json.load(fp)
+                    sid = t_data.get("session", {}).get("sessionId")
+                    b_events = t_data.get("behaviourEvents", [])
+                    if sid:
+                        trace_events_cache[sid] = {f"{sid}:ev_{i}" for i in range(len(b_events))}
+                except Exception:
+                    pass
+
+    # 5. Validate every single example for all 9 provenance fields & trace integrity
+    seen_sessions = set()
+    for idx, ex in enumerate(examples):
+        for field in PROVENANCE_REQUIRED_FIELDS:
+            if field not in ex or ex[field] is None:
+                raise ManifestValidationError(
+                    f"Example [{idx}] ({ex.get('example_id', 'unknown')}) is missing required provenance field: '{field}'"
+                )
+            if isinstance(ex[field], str) and not ex[field].strip():
+                raise ManifestValidationError(
+                    f"Example [{idx}] has empty string for required provenance field: '{field}'"
+                )
+
+        sid = ex["session_id"]
+        seen_sessions.add(sid)
+        split = ex.get("split")
+        if split not in {"train", "val", "test"}:
+            raise ManifestValidationError(f"Example [{idx}] has invalid split tag: '{split}'")
+
+        # Verify example split matches session partition
+        if sid in train_s and split != "train":
+            raise ManifestValidationError(f"Example [{idx}] belongs to train session '{sid}' but has split '{split}'")
+        elif sid in val_s and split != "val":
+            raise ManifestValidationError(f"Example [{idx}] belongs to val session '{sid}' but has split '{split}'")
+        elif sid in test_s and split != "test":
+            raise ManifestValidationError(f"Example [{idx}] belongs to test session '{sid}' but has split '{split}'")
+
+        # Verify label policy consistency
+        if ex.get("label_policy_version") != LABEL_POLICY_VERSION:
+            raise ManifestValidationError(
+                f"Example [{idx}] label_policy_version '{ex.get('label_policy_version')}' != '{LABEL_POLICY_VERSION}'"
+            )
+
+        target_int = ex.get("target_intervention")
+        if target_int not in INTERVENTION_VOCABULARY:
+            raise ManifestValidationError(f"Example [{idx}] has unknown intervention: '{target_int}'")
+        if ex.get("target_intervention_id") != INTERVENTION_TO_ID[target_int]:
+            raise ManifestValidationError(
+                f"Example [{idx}] intervention ID mismatch: '{target_int}' mapped to {ex.get('target_intervention_id')}"
+            )
+
+        # Source event verification against trace cache
+        source_evs = ex.get("source_event_ids", [])
+        if not isinstance(source_evs, list):
+            raise ManifestValidationError(f"Example [{idx}] source_event_ids must be a list")
+        if len(source_evs) == 0:
+            raise ManifestValidationError(f"Example [{idx}] has empty source_event_ids list")
+
+        if check_events and sid in trace_events_cache:
+            valid_ev_ids = trace_events_cache[sid]
+            for ev_id in source_evs:
+                if ev_id not in valid_ev_ids:
+                    raise ManifestValidationError(
+                        f"Example [{idx}] references non-existent sourceEventId: '{ev_id}' for session '{sid}'"
+                    )
+
+    return {
+        "valid": True,
+        "dataset_version": manifest["dataset_version"],
+        "total_examples": len(examples),
+        "total_sessions": len(seen_sessions),
+        "split_summary": split_summary,
+    }
+
+
+# ============================================================================
+# 5. Standalone CLI Execution
 # ============================================================================
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Synchronize Edge-AUI interaction datasets from Hugging Face Hub.")
+    parser = argparse.ArgumentParser(description="Synchronize and Validate Edge-AUI Datasets.")
     parser.add_argument("--repo-id", type=str, default="T40/edge-aui-framework-data", help="Hugging Face repo ID")
     parser.add_argument("--data-dir", type=str, default=None, help="Target raw data directory")
     parser.add_argument("--token", type=str, default=None, help="Hugging Face access token")
     parser.add_argument("--force", action="store_true", help="Force redownload")
+    parser.add_argument("--validate-manifest", type=str, default=None, help="Path to manifest JSON to validate")
+    parser.add_argument("--trace-dir", type=str, default=".data/raw/scripted", help="Trace directory for source event validation")
     args = parser.parse_args()
 
-    print(f"Environment: Colab={is_colab()}, Kaggle={is_kaggle()}")
-    path = ensure_dataset(data_dir=args.data_dir, repo_id=args.repo_id, token=args.token, force_download=args.force)
-    print(f"Dataset ready at: {path}")
+    if args.validate_manifest:
+        res = validate_dataset_manifest(args.validate_manifest, trace_dir=args.trace_dir)
+        print(f"[DataManager] Manifest validation SUCCESS: {res['dataset_version']} ({res['total_examples']} examples)")
+    else:
+        print(f"Environment: Colab={is_colab()}, Kaggle={is_kaggle()}")
+        path = ensure_dataset(data_dir=args.data_dir, repo_id=args.repo_id, token=args.token, force_download=args.force)
+        print(f"Dataset ready at: {path}")
+

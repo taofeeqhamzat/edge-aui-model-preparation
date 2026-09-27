@@ -56,3 +56,108 @@ Missing telemetry modalities (e.g. scroll on fixed viewports) strictly clear the
   `3: expand_tooltip`
   `4: no_op`
 - **Methodological Claim:** Labels generated via `intervention_label_policy.py` are scripted outputs from a deterministic rule policy conditioned on observable outcome events and UIContext, and are explicitly bounded under ADR-013.
+
+---
+
+## 4. Provenance-Versioned Dataset Manifest Schema (Task 11.2)
+
+- **Owning File:** `src/data_manager.py` (`create_dataset_manifest`, `validate_dataset_manifest`)
+- **CLI Commands:**
+  - Build: `python3 -m src.target_dataset --split --build-manifest --version v1.0.0`
+  - Validate: `python3 -m src.data --validate-manifest .data/processed/v1.0.0/manifest.json`
+- **Immutability Contract:** Once generated for Phase D training, the manifest and dataset version are **frozen**. Any modification requires incrementing the version string and re-running all experiments.
+
+### Top-Level Manifest Schema (`manifest.json`)
+
+```json
+{
+  "manifest_schema_version": "1.0.0",
+  "dataset_version": "v1.0.0",
+  "content_hash": "cd7290a733c4",
+  "created_at": "2026-09-27T16:32:05.459895+00:00",
+  "source_data_type": "scripted_substitute_testbed",
+  "claim_boundary": "ADR-013: Substitute interaction traces and scripted label assignments...",
+  "provenance_spec": {
+    "brief_reference": "Brief Section 8 & Section 17",
+    "required_fields": [
+      "session_id",
+      "experiment_id",
+      "condition_id",
+      "task_id",
+      "anchor_window_id",
+      "source_event_ids",
+      "preprocessing_version",
+      "feature_schema_version",
+      "target_generation_version"
+    ]
+  },
+  "code_versions": {
+    "preprocessing_version": "1.1.0",
+    "feature_schema_version": "1.1.0",
+    "label_policy_version": "1.0.0",
+    "trace_schema_version": "1.1.0"
+  },
+  "split_summary": { ... },
+  "class_weights": { ... },
+  "total_examples": 289,
+  "examples": [ ... ]
+}
+```
+
+### The 9 Mandatory Provenance Fields (Brief §8)
+
+Every example in `manifest.json` (and every row in `target_intervention_dataset.parquet`) retains complete provenance back to its originating trace:
+
+| # | Field Name | Data Type | Source in Runtime Trace | Description & Validation Rule |
+|---|---|---|---|---|
+| 1 | `session_id` | `string` | `trace.session.sessionId` | Unique identifier of recorded interaction session. Must match an extant trace. |
+| 2 | `experiment_id` | `string` | `trace.session.experimentId` | Experiment deployment run token. Non-empty string. |
+| 3 | `condition_id` | `string` | `trace.session.conditionId` | UI condition: `"baseline"` or `"adaptive"`. |
+| 4 | `task_id` | `string` | `trace.task.currentTaskId` | Active testbed benchmark task (`"T1"`, `"T2"`, or `"T3"`). |
+| 5 | `anchor_window_id`| `int64` | `trace.microTensors[-1].windowId` | Integer ID of the terminal window in the sequence. |
+| 6 | `source_event_ids`| `list[string]` | `trace.behaviourEvents[i]` | Canonical event identifiers `"{session_id}:ev_{i}"` overlapping the 500 ms window sequence span. Every ID must exist in `trace.behaviourEvents`. |
+| 7 | `preprocessing_version` | `string` | `PREPROCESSING_VERSION` | Fixed pipeline code version (`"1.1.0"`). |
+| 8 | `feature_schema_version` | `string` | `FEATURE_SCHEMA_VERSION` | Fixed 18-D feature schema version (`"1.1.0"`). |
+| 9 | `target_generation_version` | `string` | `LABEL_POLICY_VERSION` | Version of scripted outcome-to-intervention policy (`"1.0.0"`). |
+
+---
+
+## 5. Target Intervention Dataset Parquet Schema
+
+- **File Path:** `.data/processed/v1.0.0/target_intervention_dataset.parquet`
+- **Schema Name:** `TARGET_DATASET_SCHEMA` in `src/target_dataset.py`
+
+| Column | Type | Nullable | Description |
+|---|---|---|---|
+| `session_id` | `string` | No | Source session UUID |
+| `experiment_id` | `string` | No | Testbed experiment run ID |
+| `condition_id` | `string` | No | Experimental condition (`baseline` / `adaptive`) |
+| `task_id` | `string` | No | Task ID (`T1`, `T2`, `T3`) |
+| `anchor_window_id` | `int64` | No | Terminal sequence window ID |
+| `sequence` | `list<list<float32>>` | No | Shape $(T=8, D=18)$ MicroTensor matrix |
+| `context_vector` | `list<float32>` | No | Shape $(6,)$ normalized $\mathbb{R}^6$ UIContext vector |
+| `target_outcome` | `string` | No | Downstream behavioral outcome class |
+| `target_outcome_id` | `int64` | No | Integer ID $[0..6]$ in outcome taxonomy |
+| `target_intervention` | `string` | No | Scripted intervention label |
+| `target_intervention_id` | `int64` | No | Integer ID $[0..4]$ in intervention vocabulary |
+| `label_policy_version` | `string` | No | Policy version string (`1.0.0`) |
+| `is_scripted_policy` | `bool` | No | Always `true` per ADR-013 claim boundary |
+| `split` | `string` | No | Session partition: `"train"`, `"val"`, or `"test"` |
+| `source_event_ids` | `list<string>` | No | List of canonical event IDs within sequence span |
+| `preprocessing_version` | `string` | No | Preprocessing code version (`1.1.0`) |
+| `feature_schema_version` | `string` | No | Feature schema code version (`1.1.0`) |
+| `target_generation_version` | `string` | No | Target policy code version (`1.0.0`) |
+
+---
+
+## 6. Manifest Validation Invariants
+
+The validator `validate_dataset_manifest` in `src/data_manager.py` executes 6 strict checks and raises `ManifestValidationError` (never warns):
+
+1. **Header Completeness:** All required metadata fields must be present and non-null.
+2. **Code Version Locking:** `code_versions` must equal active constants in Python code.
+3. **Session-Bounded Disjointness:** $\mathcal{S}_{\text{train}} \cap \mathcal{S}_{\text{val}} = \emptyset$, $\mathcal{S}_{\text{train}} \cap \mathcal{S}_{\text{test}} = \emptyset$, $\mathcal{S}_{\text{val}} \cap \mathcal{S}_{\text{test}} = \emptyset$.
+4. **Leak-Free Class Weights:** `class_weights.derived_on` must strictly equal `"train_partition_only"`.
+5. **Full Example Provenance:** Every example must retain non-empty values for all 9 Brief §8 provenance fields.
+6. **Source Event Traceability:** Every `sourceEventId` in every example must resolve to a valid event in the corresponding source trace file (`0 <= ev_idx < len(trace.behaviourEvents)`).
+

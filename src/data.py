@@ -897,9 +897,22 @@ if __name__ == "__main__":
     parser.add_argument("--ingest-traces", type=str, default=None, help="Directory containing exported JSON traces to ingest into canonical Parquet")
     parser.add_argument("--output", type=str, default=None, help="Output path (or directory) for canonical Parquet")
     parser.add_argument("--force", action="store_true", help="Force re-conversion")
+    parser.add_argument("--validate-manifest", type=str, default=None, help="Validate dataset manifest JSON (Task 11.2)")
+    parser.add_argument("--trace-dir", type=str, default=".data/raw/scripted", help="Trace directory for source event validation")
     args = parser.parse_args()
 
-    if args.ingest_traces:
+    if args.validate_manifest:
+        try:
+            from data_manager import validate_dataset_manifest, ManifestValidationError
+        except ImportError:
+            from src.data_manager import validate_dataset_manifest, ManifestValidationError
+        try:
+            res = validate_dataset_manifest(args.validate_manifest, trace_dir=args.trace_dir)
+            print(f"[Data Driver] Manifest is strictly valid: {res['dataset_version']} ({res['total_examples']} examples)")
+        except ManifestValidationError as e:
+            print(f"[Data Driver] MANIFEST VALIDATION FAILED: {e}", file=sys.stderr)
+            sys.exit(1)
+    elif args.ingest_traces:
         try:
             from trace_ingestion import ingest_trace_directory
         except ImportError:
