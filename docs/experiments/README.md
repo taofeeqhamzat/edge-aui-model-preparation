@@ -20,6 +20,10 @@ This directory contains empirical experiment logs, diagnostic visual plots, and 
   - Pre-audit issue state: [`2/before/`](2/before/)
   - Post-audit diagnostic plots: [`2/after/`](2/after/)
 
+- **[Experiment 3: Progressive Fine-Tuning and Evaluation of TargetInterventionHead](3/README.md)**  
+  Evaluates transfer-learning regimes E1 (Strict), E2 (Partial), E3 (Full) and foundation retention on dataset `v1.0.0` (ADR-003, ADR-006, ADR-013).
+  - Diagnostic post-training plots: [`3/after/`](3/after/)
+
 ## Directory Structure
 
 Each numbered experiment directory contains:
