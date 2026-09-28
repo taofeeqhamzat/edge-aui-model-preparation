@@ -22,7 +22,9 @@ This directory contains empirical experiment logs, diagnostic visual plots, and 
 
 - **[Experiment 3: Progressive Fine-Tuning and Evaluation of TargetInterventionHead](3/README.md)**  
   Evaluates transfer-learning regimes E1 (Strict), E2 (Partial), E3 (Full) and foundation retention on dataset `v1.0.0` (ADR-003, ADR-006, ADR-013).
+  E3 selected for edge integration (Test Macro-F1: 0.5524, Accuracy: 76.7%). ONNX export completed; reproducibility bundle verified.
   - Diagnostic post-training plots: [`3/after/`](3/after/)
+  - Reproducibility bundle: `models/bundles/v1.0.0/bundle.json`
 
 ## Directory Structure
 
