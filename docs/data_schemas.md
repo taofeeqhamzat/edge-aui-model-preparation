@@ -104,6 +104,12 @@ Missing telemetry modalities (e.g. scroll on fixed viewports) strictly clear the
 }
 ```
 
+> **Trace schema version.** `code_versions.trace_schema_version` mirrors
+> `EXPERIMENT_TRACE_SCHEMA_VERSION` at manifest-creation time (currently `1.3.0`). The example above
+> is the historical `v1.0.0` manifest, which recorded `1.1.0`. This field is informational: the
+> validator's code-version lock checks `preprocessing_version`, `feature_schema_version`, and
+> `label_policy_version` only.
+
 ### The 9 Mandatory Provenance Fields (Brief §8)
 
 Every example in `manifest.json` (and every row in `target_intervention_dataset.parquet`) retains complete provenance back to its originating trace:
@@ -160,4 +166,28 @@ The validator `validate_dataset_manifest` in `src/data_manager.py` executes 6 st
 4. **Leak-Free Class Weights:** `class_weights.derived_on` must strictly equal `"train_partition_only"`.
 5. **Full Example Provenance:** Every example must retain non-empty values for all 9 Brief §8 provenance fields.
 6. **Source Event Traceability:** Every `sourceEventId` in every example must resolve to a valid event in the corresponding source trace file (`0 <= ev_idx < len(trace.behaviourEvents)`).
+
+---
+
+## 7. Trace Schema Versions, Provenance, and Configuration Caveat
+
+### Supported ExperimentTrace versions
+
+- **Owning File:** `src/trace_ingestion.py`
+- **Current version:** `1.3.0` (`EXPERIMENT_TRACE_SCHEMA_VERSION`).
+- **Supported legacy versions:** `1.2.0`, `1.1.0` (`SUPPORTED_EXPERIMENT_TRACE_SCHEMA_VERSIONS`).
+- **Per-version key contract:** `TRACE_KEY_ALLOWLIST` and `BEHAVIOUR_EVENT_KEY_ALLOWLIST` declare the exact permitted top-level and `behaviourEvents[]` keys. `1.3.0` additionally permits the `policyDecisions` array and the `ariaExpanded` event key. The new `metadata`/`session` fields (`clock`, `provenance`, `applicationVersion`, `modelVersion`, `executionProvider`, `policyVersion`, `mining`, `evictions`, `integrityWarnings`, `participantId`) are read but are not themselves key-restricted, matching the pre-existing behaviour.
+- **No silent skips:** `ingest_trace_directory` reports every file whose `schemaVersion` falls outside the allow-list and then raises `UnsupportedTraceSchemaError`, which carries a machine-readable `.skipped` list of `{path, schema_version, reason}` entries. Passing `strict=False` (CLI: `--allow-unsupported-trace-versions`) ingests the supported subset only, and still reports what it skipped on stderr.
+
+### Canonical event `provenance` column
+
+`CANONICAL_EVENT_SCHEMA` (`src/data.py`) carries a `provenance` string column populated from `trace.session.provenance` (`"scripted"` or `"participant"`), defaulting to `"scripted"` for legacy traces that predate the field. Because `provenance` is a single word, its snake_case and CamelCase spellings coincide, so one column serves both alias conventions. The column exists so scripted substitute captures (ADR-013) and participant captures can never be pooled by accident.
+
+### Deliberately deferred
+
+`policyDecisions` is accepted (allow-listed) but **not** yet threaded into the MicroTensor, sequence, or target-dataset Parquet schemas or the training pipeline.
+
+### Configuration caveat (effective values are hard-coded defaults)
+
+`src/config.yaml` is not loaded on the trace-ingestion path: `load_config` is imported by `src/microtensor_store.py` and `src/target_dataset.py` but never called, and `src/trace_ingestion.py` never reads config at all. The effective values there are the hard-coded module defaults — including the bare `ts_ms // 250` window-correlation fallback in `parse_experiment_trace`. Do not treat `src/config.yaml` as authoritative until that wiring is fixed.
 

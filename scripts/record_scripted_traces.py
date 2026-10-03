@@ -539,7 +539,7 @@ def generate_markdown_report(doc_path: Path, manifest: dict):
 
 ## 3. Provenance & Ingestion Verification
 
-Every recorded trace conforms to `ExperimentTrace schemaVersion 1.1.0` and satisfies:
+Every recorded trace conforms to `ExperimentTrace schemaVersion 1.3.0` and satisfies:
 1. Complete task lifecycle (`task_start`, all intermediate `task_step` entries, and `task_complete`).
 2. Exact 1-to-1 mapping from emitted `microTensor` windows to derived `outcome` records.
 3. Baseline condition zero-mutation invariant (0 applied interventions in baseline trials).
