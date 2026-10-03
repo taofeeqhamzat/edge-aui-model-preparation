@@ -69,8 +69,12 @@ def derive_intervention_label(
     Policy:
     1. If custom_policy defines an override for outcome, evaluate it.
     2. Context-aware conditioning:
-       - If outcome == 'HOVER_DWELL' and context has primaryActionAvailable=True and taskProgress >= 0.5:
+       - If outcome == 'HOVER_DWELL' and context has primaryActionAvailable=True and taskProgress > 0.5:
          Recommend 'highlight_primary_action' to guide completion of current task step.
+         The comparison is strictly greater-than: taskProgress == 0.5 falls through to
+         'expand_tooltip'. This boundary is observable for exactly one case (T2 step 2 at
+         taskProgress == 0.5) and should be treated as a methodology question rather than
+         changed silently, because it defines training labels.
        - If outcome == 'HOVER_DWELL' without primary action focus:
          Recommend 'expand_tooltip'.
        - If outcome == 'BACKTRACK' or 'ABANDON':
@@ -89,6 +93,9 @@ def derive_intervention_label(
         if context and isinstance(context, dict):
             primary_avail = bool(context.get("primaryActionAvailable"))
             task_progress = float(context.get("taskProgress", 0.0))
+            # Strict '>' by design (matches the docstring): taskProgress == 0.5 routes to
+            # 'expand_tooltip', not 'highlight_primary_action'. This defines training labels;
+            # flag the boundary to the supervisor before ever changing it.
             if primary_avail and task_progress > 0.5:
                 return "highlight_primary_action", INTERVENTION_TO_ID["highlight_primary_action"]
         return "expand_tooltip", INTERVENTION_TO_ID["expand_tooltip"]
