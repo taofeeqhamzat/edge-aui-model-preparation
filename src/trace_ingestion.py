@@ -1,19 +1,29 @@
 """
 trace_ingestion.py
-Ingestion layer for exported browser ExperimentTrace (schemaVersion 1.1.0).
+Ingestion layer for exported browser ExperimentTrace (schemaVersion 1.3.0, plus
+supported legacy 1.2.0 / 1.1.0 captures).
 Converts exported runtime traces into the canonical telemetry dataset format (Parquet).
 
 Implements Task 9.1 specifications:
-- Strict validation of ExperimentTrace schemaVersion 1.1.0.
+- Strict, version-keyed validation of the ExperimentTrace contract against
+  TRACE_KEY_ALLOWLIST / BEHAVIOUR_EVENT_KEY_ALLOWLIST. A trace declaring any other
+  schemaVersion is rejected, never silently skipped.
 - Explicit detection and rejection of unmapped trace and event fields.
 - Non-positive / missing viewport dimension validation (fail visibly).
 - Strict modality masking (no zero-imputation of missing modalities).
 - Full provenance carrying: sessionId, experimentId, conditionId, taskId,
-  windowId, sourceEventIds, preprocessingVersion, and featureSchemaVersion.
+  windowId, sourceEventIds, preprocessingVersion, featureSchemaVersion, and
+  provenance (scripted vs participant).
 - Deterministic, byte-identical Parquet export across multiple executions.
+
+Configuration caveat: this module never reads src/config.yaml. `load_config` is
+imported by sibling modules but is not called on the trace-ingestion path, so the
+effective values here are the hard-coded module defaults below (including the bare
+`ts_ms // 250` window-correlation fallback). Do not assume config.yaml is honoured.
 """
 
 import os
+import sys
 import glob
 import json
 from pathlib import Path
@@ -39,11 +49,20 @@ except ImportError:
         CANONICAL_EVENT_SCHEMA = None
         find_project_root = lambda: Path(os.getcwd()).resolve()
 
-EXPERIMENT_TRACE_SCHEMA_VERSION = "1.1.0"
+EXPERIMENT_TRACE_SCHEMA_VERSION = "1.3.0"
+SUPPORTED_EXPERIMENT_TRACE_SCHEMA_VERSIONS: List[str] = ["1.3.0", "1.2.0", "1.1.0"]
+
+# Layer-1 *preprocessing* versions, deliberately NOT tied to the trace schema version.
+# Adopting the 1.3.0 trace contract changed which records are accepted and added a
+# provenance annotation; it did not change any windowing transform or feature value,
+# so these version strings must not move with EXPERIMENT_TRACE_SCHEMA_VERSION.
 PREPROCESSING_VERSION = "1.1.0"
 FEATURE_SCHEMA_VERSION = "1.1.0"
 
-KNOWN_TRACE_KEYS = {
+# Top-level keys permitted by each supported ExperimentTrace version. This is the exact
+# per-version contract: a top-level key absent from the relevant set is rejected rather
+# than silently ignored, so a field added by the runtime cannot be dropped unnoticed.
+_COMMON_TRACE_KEYS = {
     "schemaVersion",
     "exportedAt",
     "session",
@@ -59,7 +78,15 @@ KNOWN_TRACE_KEYS = {
     "taskEvents"
 }
 
-KNOWN_BEHAVIOUR_EVENT_KEYS = {
+TRACE_KEY_ALLOWLIST: Dict[str, set] = {
+    "1.1.0": set(_COMMON_TRACE_KEYS),
+    "1.2.0": set(_COMMON_TRACE_KEYS),
+    # 1.3.0 adds one policy verdict per evaluation, including rejections (F-07).
+    "1.3.0": set(_COMMON_TRACE_KEYS) | {"policyDecisions"},
+}
+
+# Behaviour-event keys permitted by each supported ExperimentTrace version.
+_COMMON_BEHAVIOUR_EVENT_KEYS = {
     "timestamp",
     "type",
     "x",
@@ -76,6 +103,13 @@ KNOWN_BEHAVIOUR_EVENT_KEYS = {
     "targetTag",
     "viewport",
     "document"
+}
+
+BEHAVIOUR_EVENT_KEY_ALLOWLIST: Dict[str, set] = {
+    "1.1.0": set(_COMMON_BEHAVIOUR_EVENT_KEYS),
+    "1.2.0": set(_COMMON_BEHAVIOUR_EVENT_KEYS),
+    # 1.3.0 records the observed post-action disclosure state (F-06).
+    "1.3.0": set(_COMMON_BEHAVIOUR_EVENT_KEYS) | {"ariaExpanded"},
 }
 
 
@@ -99,20 +133,22 @@ def parse_experiment_trace(
     else:
         raise TypeError(f"Expected path or dict, received: {type(trace_data_or_path)}")
 
-    # 1. Validate top-level schema and unmapped fields
+    # 1. Validate the declared schema version, then the top-level keys permitted by it.
     if not isinstance(trace, dict):
         raise ValueError("Trace payload must be a JSON object")
 
-    for key in trace.keys():
-        if key not in KNOWN_TRACE_KEYS:
-            raise ValueError(f"Unmapped trace field: '{key}'")
-
     schema_version = trace.get("schemaVersion")
-    if schema_version != EXPERIMENT_TRACE_SCHEMA_VERSION:
+    if schema_version not in TRACE_KEY_ALLOWLIST:
         raise ValueError(
-            f"Invalid schemaVersion: expected '{EXPERIMENT_TRACE_SCHEMA_VERSION}', "
-            f"received '{schema_version}'"
+            f"Invalid schemaVersion: '{schema_version}' is not supported; expected one of "
+            f"{SUPPORTED_EXPERIMENT_TRACE_SCHEMA_VERSIONS}"
         )
+
+    allowed_trace_keys = TRACE_KEY_ALLOWLIST[schema_version]
+    allowed_event_keys = BEHAVIOUR_EVENT_KEY_ALLOWLIST[schema_version]
+    for key in trace.keys():
+        if key not in allowed_trace_keys:
+            raise ValueError(f"Unmapped trace field: '{key}'")
 
     session_obj = trace.get("session")
     if not isinstance(session_obj, dict):
@@ -123,6 +159,16 @@ def parse_experiment_trace(
         raise ValueError("Trace session is missing non-empty 'sessionId'")
 
     user_id = str(session_obj.get("userId", session_id))
+
+    # Provenance records scripted/synthetic vs participant-derived origin (ADR-018).
+    # Legacy 1.1.0/1.2.0 traces predate the field and are scripted substitute captures,
+    # so they default to "scripted" and can never be pooled with participant data.
+    provenance = str(session_obj.get("provenance") or "scripted").strip() or "scripted"
+    if provenance not in ("scripted", "participant"):
+        raise ValueError(
+            f"Invalid session.provenance: '{provenance}' (expected 'scripted' or 'participant')"
+        )
+
     metadata_obj = trace.get("metadata", {}) if isinstance(trace.get("metadata"), dict) else {}
     task_obj = trace.get("task", {}) if isinstance(trace.get("task"), dict) else {}
 
@@ -179,9 +225,9 @@ def parse_experiment_trace(
         if not isinstance(ev, dict):
             raise ValueError(f"behaviourEvents[{idx}] must be a dictionary")
 
-        # Strict check for unmapped event fields
+        # Strict check for unmapped event fields against the version's allow-list
         for ev_key in ev.keys():
-            if ev_key not in KNOWN_BEHAVIOUR_EVENT_KEYS:
+            if ev_key not in allowed_event_keys:
                 raise ValueError(f"Unmapped trace event field: '{ev_key}'")
 
         if "timestamp" not in ev or not isinstance(ev["timestamp"], (int, float)):
@@ -261,13 +307,26 @@ def parse_experiment_trace(
         source_ev_id = f"{session_id}:ev_{idx}"
 
         # Correlate windowId
+        #
+        # The trace's window bounds are half-open `[start, end)`, so an event exactly on a
+        # boundary belongs to the closing window; the comparison here is inclusive to keep such
+        # an event attributed rather than dropped.
         matched_window_id: int = -1
         for wid, wstart, wend in window_spans:
             if wstart <= ts_raw <= wend:
                 matched_window_id = wid
                 break
         if matched_window_id == -1:
-            matched_window_id = int(ts_ms // 250)
+            # Fall back to the latest window that ends at or before this event.
+            #
+            # The previous fallback was `int(ts_ms // 250)`. That arithmetic assumed a short
+            # monotonic timestamp; against epoch milliseconds (schema 1.3.0) it produces a window
+            # id in the billions, which overflows the int32 `window_id` column and aborts the
+            # entire ingestion run. A mis-attributed id is also worse than none, because it
+            # silently corrupts the downstream `window_id` join instead of failing.
+            candidates = [(wid, wend) for wid, _wstart, wend in window_spans if wend <= ts_raw]
+            if candidates:
+                matched_window_id = max(candidates, key=lambda item: item[1])[0]
 
         row: Dict[str, Any] = {
             "dataset_id": dataset_id,
@@ -296,6 +355,7 @@ def parse_experiment_trace(
             "task_id": task_id,
             "window_id": matched_window_id,
             "source_event_ids": source_ev_id,
+            "provenance": provenance,
             "preprocessing_version": PREPROCESSING_VERSION,
             "feature_schema_version": FEATURE_SCHEMA_VERSION,
             # CamelCase aliases for exact acceptance criteria verification
@@ -315,15 +375,60 @@ def parse_experiment_trace(
     return canonical_events
 
 
+class UnsupportedTraceSchemaError(ValueError):
+    """
+    Raised when one or more trace files declare a schemaVersion outside
+    SUPPORTED_EXPERIMENT_TRACE_SCHEMA_VERSIONS.
+
+    Carries a machine-readable ``skipped`` report: a list of
+    ``{"path": str, "schema_version": Any, "reason": str}`` entries, one per file.
+    """
+
+    def __init__(self, skipped: List[Dict[str, Any]]):
+        self.skipped = skipped
+        details = "; ".join(
+            f"{Path(entry['path']).name} (schemaVersion={entry['schema_version']!r})"
+            for entry in skipped
+        )
+        super().__init__(
+            f"{len(skipped)} trace file(s) declare an unsupported schemaVersion and were "
+            f"not ingested: {details}. Supported versions: "
+            f"{SUPPORTED_EXPERIMENT_TRACE_SCHEMA_VERSIONS}. Re-run with strict=False only if "
+            f"excluding these files is intended."
+        )
+
+
+def _report_skipped_traces(skipped: List[Dict[str, Any]]) -> None:
+    """Print a loud, per-file report of traces excluded for an unsupported schemaVersion."""
+    print(
+        f"[Trace Ingestion] WARNING: {len(skipped)} trace file(s) declared a schemaVersion "
+        f"outside {SUPPORTED_EXPERIMENT_TRACE_SCHEMA_VERSIONS} and were NOT ingested:",
+        file=sys.stderr,
+    )
+    for entry in skipped:
+        print(
+            f"[Trace Ingestion]   - {entry['path']} "
+            f"(schemaVersion={entry['schema_version']!r}): {entry['reason']}",
+            file=sys.stderr,
+        )
+
+
 def ingest_trace_directory(
     trace_dir: Union[str, Path],
     output_path: Optional[Union[str, Path]] = None,
     dataset_id: str = "target_testbed",
-    force: bool = False
+    force: bool = False,
+    strict: bool = True
 ) -> str:
     """
     Ingests all JSON experiment traces from trace_dir into a single canonical Parquet file.
     Produces deterministic, byte-identical output across consecutive runs over identical inputs.
+
+    Any file declaring a schemaVersion outside SUPPORTED_EXPERIMENT_TRACE_SCHEMA_VERSIONS is
+    never silently dropped: by default (``strict=True``) the run raises
+    UnsupportedTraceSchemaError after reporting every offending file. Pass ``strict=False`` to
+    ingest the supported subset explicitly, in which case the skipped files are still reported
+    on stderr and listed on the exception should no supported trace remain.
     """
     if not PYARROW_AVAILABLE:
         raise RuntimeError("PyArrow is required for canonical Parquet export.")
@@ -350,19 +455,36 @@ def ingest_trace_directory(
 
     all_rows: List[Dict[str, Any]] = []
     ingested_count = 0
+    skipped: List[Dict[str, Any]] = []
     for fpath in json_files:
+        with open(fpath, "r", encoding="utf-8") as f:
+            trace = json.load(f)
         try:
-            rows = parse_experiment_trace(fpath, dataset_id=dataset_id)
-            all_rows.extend(rows)
-            ingested_count += 1
+            rows = parse_experiment_trace(trace, dataset_id=dataset_id)
         except ValueError as e:
-            if "Invalid schemaVersion" in str(e):
-                print(f"[Trace Ingestion] Skipping {Path(fpath).name}: {e}")
+            declared_version = trace.get("schemaVersion") if isinstance(trace, dict) else None
+            if declared_version not in TRACE_KEY_ALLOWLIST:
+                skipped.append({
+                    "path": str(fpath),
+                    "schema_version": declared_version,
+                    "reason": str(e),
+                })
                 continue
             raise
+        all_rows.extend(rows)
+        ingested_count += 1
+
+    if skipped:
+        _report_skipped_traces(skipped)
+        if strict:
+            # Fail loudly instead of reporting success while entire (newer) traces vanish.
+            raise UnsupportedTraceSchemaError(skipped)
 
     if not all_rows:
-        raise ValueError(f"No valid schemaVersion '{EXPERIMENT_TRACE_SCHEMA_VERSION}' traces found in: {in_dir}")
+        raise ValueError(
+            f"No traces with a supported schemaVersion "
+            f"{SUPPORTED_EXPERIMENT_TRACE_SCHEMA_VERSIONS} found in: {in_dir}"
+        )
 
     # Global deterministic ordering across all sessions: (session_id, timestamp_ms, source_event_id)
     all_rows.sort(key=lambda r: (r["session_id"], r["timestamp_ms"], r["source_event_id"]))
@@ -378,7 +500,8 @@ def ingest_trace_directory(
     pq.write_table(table, str(out_file), compression="snappy")
 
     print(
-        f"[Trace Ingestion] Successfully ingested {len(json_files)} trace file(s), "
+        f"[Trace Ingestion] Successfully ingested {ingested_count} trace file(s) "
+        f"({len(skipped)} skipped for unsupported schemaVersion), "
         f"wrote {len(all_rows)} canonical events to {out_file} "
         f"({out_file.stat().st_size / 1024 / 1024:.2f} MB)"
     )

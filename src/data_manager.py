@@ -359,7 +359,8 @@ except ImportError:
         LABEL_POLICY_VERSION = "1.0.0"
         INTERVENTION_VOCABULARY = ("simplify_options", "highlight_primary_action", "offer_assistance", "expand_tooltip", "no_op")
         INTERVENTION_TO_ID = {name: idx for idx, name in enumerate(INTERVENTION_VOCABULARY)}
-        EXPERIMENT_TRACE_SCHEMA_VERSION = "1.1.0"
+        EXPERIMENT_TRACE_SCHEMA_VERSION = "1.3.0"
+        # Layer-1 preprocessing versions; intentionally decoupled from the trace schema.
         PREPROCESSING_VERSION = "1.1.0"
         FEATURE_SCHEMA_VERSION = "1.1.0"
 

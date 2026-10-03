@@ -24,3 +24,6 @@ docs/plan/*.md
 !docs/plan/**/.gitkeep
 clipboard*.md
 instructions*.md
+# Stray session artifact: a literal filename created when a shell quoted a `:memory:` DSN
+# incorrectly. Not project data, but it keeps reappearing from ad-hoc commands.
+:memory:*

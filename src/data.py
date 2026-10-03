@@ -65,6 +65,9 @@ if PYARROW_AVAILABLE:
         ("source_event_ids", pa.string()), # Nullable
         ("preprocessing_version", pa.string()), # Nullable
         ("feature_schema_version", pa.string()), # Nullable
+        # Origin of the trace: "scripted" or "participant". Single column because the
+        # snake_case and CamelCase spellings are identical for this field.
+        ("provenance", pa.string()),       # Nullable (defaults to "scripted")
         # CamelCase aliases for exact acceptance criteria verification
         ("sessionId", pa.string()),        # Nullable
         ("experimentId", pa.string()),     # Nullable
@@ -895,6 +898,7 @@ if __name__ == "__main__":
     parser.add_argument("--max-rows", type=int, default=None, help="Cap rows for HVT test run")
     parser.add_argument("--canonicalize", type=str, default=None, choices=["all", "adserp", "ck", "hvt"], help="Execute canonical Parquet conversion")
     parser.add_argument("--ingest-traces", type=str, default=None, help="Directory containing exported JSON traces to ingest into canonical Parquet")
+    parser.add_argument("--allow-unsupported-trace-versions", action="store_true", help="Ingest the supported subset of traces and explicitly skip files with an unsupported schemaVersion (default: fail loudly)")
     parser.add_argument("--output", type=str, default=None, help="Output path (or directory) for canonical Parquet")
     parser.add_argument("--force", action="store_true", help="Force re-conversion")
     parser.add_argument("--validate-manifest", type=str, default=None, help="Validate dataset manifest JSON (Task 11.2)")
@@ -914,15 +918,30 @@ if __name__ == "__main__":
             sys.exit(1)
     elif args.ingest_traces:
         try:
-            from trace_ingestion import ingest_trace_directory
+            from trace_ingestion import ingest_trace_directory, UnsupportedTraceSchemaError
         except ImportError:
-            from src.trace_ingestion import ingest_trace_directory
+            from src.trace_ingestion import ingest_trace_directory, UnsupportedTraceSchemaError
         out_p = args.output
         if out_p and Path(out_p).is_dir():
             out_p = str(Path(out_p) / "canonical_traces.parquet")
         elif out_p and out_p.endswith(os.sep):
             out_p = os.path.join(out_p, "canonical_traces.parquet")
-        res = ingest_trace_directory(args.ingest_traces, output_path=out_p, force=args.force)
+        try:
+            res = ingest_trace_directory(
+                args.ingest_traces,
+                output_path=out_p,
+                force=args.force,
+                strict=not args.allow_unsupported_trace_versions,
+            )
+        except UnsupportedTraceSchemaError as e:
+            print(f"[Data Driver] TRACE INGESTION FAILED: {e}", file=sys.stderr)
+            for entry in e.skipped:
+                print(
+                    f"[Data Driver]   skipped: {entry['path']} "
+                    f"(schemaVersion={entry['schema_version']!r})",
+                    file=sys.stderr,
+                )
+            sys.exit(1)
         print(f"[Data Driver] Canonical trace dataset ready at: {res}")
     elif args.canonicalize:
         if args.canonicalize == "all":
