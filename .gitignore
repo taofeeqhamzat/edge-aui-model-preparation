@@ -22,6 +22,11 @@ models/
 docs/plan/**/*.md
 docs/plan/*.md
 !docs/plan/**/.gitkeep
+# The plan 3 model-preparation package is a committed planning deliverable.
+!docs/plan/3/
+!docs/plan/3/*.md
+!docs/plan/3/workstream/
+!docs/plan/3/workstream/**/*.md
 clipboard*.md
 instructions*.md
 # Stray session artifact: a literal filename created when a shell quoted a `:memory:` DSN

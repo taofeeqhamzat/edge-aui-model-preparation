@@ -14,3 +14,11 @@ For full details on the architecture, datasets, and edge deployment, read the re
 - **Dataset Repository:** [T40/edge-aui-framework-data](https://huggingface.co/datasets/T40/edge-aui-framework-data)
 
 Please refer to the `AGENTS.md` file and `docs/` folder in this repository for pipeline instructions and architectural guidelines.
+
+## 3. Planning
+
+- [Plan 3 — semantic task-outcome model preparation](docs/plan/3/next-milestone-model-preparation-plan.md)
+  covers the next milestone's ingestion, semantic target dataset, window/horizon experiment,
+  target-head retraining and ONNX/bundle handoff.
+- [Decision dependencies](docs/plan/3/decision-dependencies.md) records the framework ADRs that
+  constrain this repository.
