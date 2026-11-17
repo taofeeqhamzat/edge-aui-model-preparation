@@ -1,7 +1,7 @@
 """
 test_trace_ingestion.py
 Unit tests verifying the trace ingestion layer for ExperimentTrace (Task 9.1).
-Covers the current 1.3.0 contract plus supported legacy 1.2.0 / 1.1.0 captures.
+Covers the current 1.4.0 contract plus supported legacy 1.3.0 / 1.2.0 / 1.1.0 captures.
 """
 
 import os
@@ -138,6 +138,56 @@ def create_minimal_trace_dict_v130(
     return trace
 
 
+def create_minimal_trace_dict_v140(
+    session_id: str = "test-session-140",
+    provenance: str = "scripted",
+    num_events: int = 5
+) -> dict:
+    """
+    Helper creating a strictly valid ExperimentTrace schemaVersion 1.4.0 dict.
+
+    The 1.4.0 fields are additive: semantic outcomes carry their vocabulary version, every
+    task event carries the task-definition version, and metadata repeats both versions so a
+    consumer can join the record without guessing.
+    """
+    trace = create_minimal_trace_dict_v130(
+        session_id=session_id, provenance=provenance, num_events=num_events
+    )
+    trace["schemaVersion"] = "1.4.0"
+
+    trace["metadata"].update({
+        "taskDefinitionVersion": "TD-v2",
+        "semanticOutcomeVocabularyVersion": "testbed-semantic/1.0.0",
+        "predictionContractVersion": "1.0.0",
+    })
+    trace["predictions"][0]["predictedOutcome"] = "apply_filter"
+    trace["predictions"][0]["predictionContractVersion"] = "1.0.0"
+    trace["taskEvents"] = [{
+        "timestamp": 1000.0,
+        "type": "task_start",
+        "taskId": trace["task"]["currentTaskId"],
+        "status": "In Progress",
+        "errors": 0,
+        "taskDefinitionVersion": "TD-v2",
+        "sessionId": session_id,
+        "experimentId": trace["session"]["experimentId"],
+        "conditionId": trace["session"]["conditionId"],
+    }]
+    trace["outcomes"] = [{
+        "timestamp": 1500.0,
+        "outcome": "FORM_SUBMIT",
+        "windowId": 0,
+        "sessionId": session_id,
+        "experimentId": trace["session"]["experimentId"],
+        "conditionId": trace["session"]["conditionId"],
+        "taskOutcome": "apply_filter",
+        "taskOutcomeVocabularyVersion": "testbed-semantic/1.0.0",
+        "taskOutcomeSource": "application_rule",
+        "taskOutcomeRuleId": "apply_filter",
+    }]
+    return trace
+
+
 class TestTraceIngestion(unittest.TestCase):
     """Test suite covering Task 9.1 trace ingestion requirements."""
 
@@ -215,7 +265,7 @@ class TestTraceIngestion(unittest.TestCase):
     def test_schema_130_trace_accepted(self):
         """A schemaVersion 1.3.0 trace (policyDecisions + new metadata) is accepted and yields rows."""
         trace = create_minimal_trace_dict_v130(provenance="participant")
-        self.assertEqual(trace["schemaVersion"], EXPERIMENT_TRACE_SCHEMA_VERSION)
+        self.assertEqual(trace["schemaVersion"], "1.3.0")
 
         rows = parse_experiment_trace(trace)
         self.assertEqual(len(rows), 5)
@@ -227,6 +277,61 @@ class TestTraceIngestion(unittest.TestCase):
             self.assertEqual(row["provenance"], "participant")
             self.assertEqual(row["preprocessing_version"], PREPROCESSING_VERSION)
             self.assertEqual(row["feature_schema_version"], FEATURE_SCHEMA_VERSION)
+
+    def test_schema_140_trace_accepted_with_semantic_fields(self):
+        """A schemaVersion 1.4.0 trace is accepted; the additive semantic fields do not reject it."""
+        trace = create_minimal_trace_dict_v140(provenance="participant")
+        self.assertEqual(trace["schemaVersion"], EXPERIMENT_TRACE_SCHEMA_VERSION)
+        self.assertEqual(EXPERIMENT_TRACE_SCHEMA_VERSION, "1.4.0")
+
+        rows = parse_experiment_trace(trace)
+        self.assertEqual(len(rows), 5)
+        for row in rows:
+            self.assertEqual(row["sessionId"], "test-session-140")
+            self.assertEqual(row["provenance"], "participant")
+            self.assertEqual(row["preprocessing_version"], PREPROCESSING_VERSION)
+            self.assertEqual(row["feature_schema_version"], FEATURE_SCHEMA_VERSION)
+
+    def test_real_140_capture_ingests(self):
+        """
+        A real exported 1.4.0 capture must ingest, not only a hand-built dict.
+
+        The deploy-verification capture is produced by the runtime's acceptance test against
+        the real ONNX graphs; the scripted captures are produced by the real browser harness.
+        A hand-authored dict proves the allow-list, not that the runtime's output fits it.
+        """
+        root = find_project_root()
+        candidates = [
+            root.parent / "edge-aui-framework" / "docs" / "experiments"
+            / "deploy-verification" / "experiment-trace-deploy-verification.json",
+        ]
+        scripted_dir = root / ".data" / "raw" / "scripted"
+        if scripted_dir.is_dir():
+            for candidate in sorted(scripted_dir.glob("scripted-*.json")):
+                candidates.append(candidate)
+
+        real_140 = []
+        for candidate in candidates:
+            if not candidate.is_file():
+                continue
+            with open(candidate, "r", encoding="utf-8") as handle:
+                declared = json.load(handle).get("schemaVersion")
+            if declared == "1.4.0":
+                real_140.append(candidate)
+
+        if not real_140:
+            self.skipTest("No exported 1.4.0 capture is available to ingest")
+
+        total_rows = 0
+        for capture in real_140:
+            rows = parse_experiment_trace(capture)
+            self.assertGreater(len(rows), 0, f"{capture.name} produced no canonical rows")
+            self.assertTrue(
+                all(row["provenance"] == "scripted" for row in rows),
+                f"{capture.name} must be labelled scripted engineering evidence",
+            )
+            total_rows += len(rows)
+        self.assertGreater(total_rows, 0)
 
     def test_epoch_millisecond_windows_do_not_overflow_window_id(self):
         """
@@ -338,8 +443,8 @@ class TestTraceIngestion(unittest.TestCase):
 
             # A future, unsupported version.
             future = create_minimal_trace_dict(session_id="future-session")
-            future["schemaVersion"] = "1.4.0"
-            with open(trace_dir / "future_140.json", "w", encoding="utf-8") as f:
+            future["schemaVersion"] = "1.5.0"
+            with open(trace_dir / "future_150.json", "w", encoding="utf-8") as f:
                 json.dump(future, f)
 
             out_p = Path(tmp_dir) / "loud.parquet"
@@ -347,15 +452,15 @@ class TestTraceIngestion(unittest.TestCase):
                 ingest_trace_directory(trace_dir, output_path=out_p, force=True)
 
             message = str(ctx.exception)
-            self.assertIn("future_140.json", message)
-            self.assertIn("1.4.0", message)
+            self.assertIn("future_150.json", message)
+            self.assertIn("1.5.0", message)
             for supported_version in SUPPORTED_EXPERIMENT_TRACE_SCHEMA_VERSIONS:
                 self.assertIn(supported_version, message)
 
             # Machine-readable report carried on the exception.
             self.assertEqual(len(ctx.exception.skipped), 1)
-            self.assertEqual(Path(ctx.exception.skipped[0]["path"]).name, "future_140.json")
-            self.assertEqual(ctx.exception.skipped[0]["schema_version"], "1.4.0")
+            self.assertEqual(Path(ctx.exception.skipped[0]["path"]).name, "future_150.json")
+            self.assertEqual(ctx.exception.skipped[0]["schema_version"], "1.5.0")
 
             self.assertFalse(
                 out_p.exists(),
@@ -374,8 +479,8 @@ class TestTraceIngestion(unittest.TestCase):
                 json.dump(supported, f)
 
             future = create_minimal_trace_dict(session_id="future-session")
-            future["schemaVersion"] = "1.4.0"
-            with open(trace_dir / "future_140.json", "w", encoding="utf-8") as f:
+            future["schemaVersion"] = "1.5.0"
+            with open(trace_dir / "future_150.json", "w", encoding="utf-8") as f:
                 json.dump(future, f)
 
             out_p = Path(tmp_dir) / "lenient.parquet"

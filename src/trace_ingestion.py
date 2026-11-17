@@ -1,7 +1,7 @@
 """
 trace_ingestion.py
-Ingestion layer for exported browser ExperimentTrace (schemaVersion 1.3.0, plus
-supported legacy 1.2.0 / 1.1.0 captures).
+Ingestion layer for exported browser ExperimentTrace (schemaVersion 1.4.0, plus
+supported legacy 1.3.0 / 1.2.0 / 1.1.0 captures).
 Converts exported runtime traces into the canonical telemetry dataset format (Parquet).
 
 Implements Task 9.1 specifications:
@@ -49,8 +49,8 @@ except ImportError:
         CANONICAL_EVENT_SCHEMA = None
         find_project_root = lambda: Path(os.getcwd()).resolve()
 
-EXPERIMENT_TRACE_SCHEMA_VERSION = "1.3.0"
-SUPPORTED_EXPERIMENT_TRACE_SCHEMA_VERSIONS: List[str] = ["1.3.0", "1.2.0", "1.1.0"]
+EXPERIMENT_TRACE_SCHEMA_VERSION = "1.4.0"
+SUPPORTED_EXPERIMENT_TRACE_SCHEMA_VERSIONS: List[str] = ["1.4.0", "1.3.0", "1.2.0", "1.1.0"]
 
 # Layer-1 *preprocessing* versions, deliberately NOT tied to the trace schema version.
 # Adopting the 1.3.0 trace contract changed which records are accepted and added a
@@ -83,6 +83,9 @@ TRACE_KEY_ALLOWLIST: Dict[str, set] = {
     "1.2.0": set(_COMMON_TRACE_KEYS),
     # 1.3.0 adds one policy verdict per evaluation, including rejections (F-07).
     "1.3.0": set(_COMMON_TRACE_KEYS) | {"policyDecisions"},
+    # 1.4.0 is additive at the record level: semantic outcomes and the task-definition
+    # version live inside `outcomes`, `taskEvents` and `metadata`. No new top-level key.
+    "1.4.0": set(_COMMON_TRACE_KEYS) | {"policyDecisions"},
 }
 
 # Behaviour-event keys permitted by each supported ExperimentTrace version.
@@ -110,6 +113,8 @@ BEHAVIOUR_EVENT_KEY_ALLOWLIST: Dict[str, set] = {
     "1.2.0": set(_COMMON_BEHAVIOUR_EVENT_KEYS),
     # 1.3.0 records the observed post-action disclosure state (F-06).
     "1.3.0": set(_COMMON_BEHAVIOUR_EVENT_KEYS) | {"ariaExpanded"},
+    # 1.4.0 adds no new behaviour-event field.
+    "1.4.0": set(_COMMON_BEHAVIOUR_EVENT_KEYS) | {"ariaExpanded"},
 }
 
 
