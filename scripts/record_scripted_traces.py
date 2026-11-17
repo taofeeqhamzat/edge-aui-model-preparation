@@ -751,7 +751,8 @@ def generate_markdown_report(doc_path: Path, manifest: dict) -> None:
 **Provenance:** `{manifest['provenance']}` — **not participant evidence**  
 **Framework commit:** `{manifest['framework_commit']}`  
 **Model-preparation commit:** `{manifest['model_preparation_commit']}`  
-**Browser / automation:** `{manifest['browser_version']}`  
+**Automation:** `{manifest.get('agent_browser_version', 'unknown')}`  
+**Browser:** `{manifest['browser_version']}`  
 **Viewport:** `{manifest['viewport']['width']}×{manifest['viewport']['height']}`  
 **Environment:** `{manifest['os_environment']}`
 
@@ -943,6 +944,7 @@ def main() -> None:
         "model_preparation_commit": model_preparation_commit,
         "model_preparation_branch": model_preparation_branch,
         "browser_version": "unknown",
+        "agent_browser_version": "unknown",
         "os_environment": f"{platform.system()} {platform.release()} ({platform.machine()})",
         "viewport": {"width": viewport[0], "height": viewport[1]},
         "origin": url,
@@ -968,7 +970,7 @@ def main() -> None:
 
         version = run_browser(command + ["--version"])
         cli_version = version.stdout.strip() if version.returncode == 0 else "agent-browser"
-        manifest["browser_version"] = cli_version
+        manifest["agent_browser_version"] = cli_version
 
         for condition in args.conditions:
             for task_id in args.tasks:
@@ -1008,7 +1010,9 @@ def main() -> None:
 
                     trace = payload["trace"]
                     measurements = payload["measurements"]
-                    manifest["browser_version"] = measurements.get("userAgent") or cli_version
+                    manifest["browser_version"] = (
+                        measurements.get("userAgent") or manifest["browser_version"]
+                    )
                     manifest["viewport"] = measurements.get("viewport") or manifest["viewport"]
 
                     filename = f"scripted-{task_id}-{condition}-trial{trial}.json"
