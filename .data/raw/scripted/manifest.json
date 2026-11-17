@@ -1,329 +1,606 @@
 {
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "2.0.0",
   "data_source": "scripted_testbed",
-  "recorded_at": "2026-09-26T23:28:22Z",
-  "framework_commit": "01765bbef3f54642a41156b8fcaeb0900f38ff6c",
-  "model_preparation_commit": "f4c2bd13dc9c0d74b98851bd377a592f6962d060",
-  "browser_version": "agent-browser 0.27.0",
-  "os_environment": "Darwin 27.0.0 (arm64)",
-  "trials_per_task": 3,
+  "provenance": "scripted",
+  "recorded_at": "2026-11-17T10:32:03Z",
+  "framework_commit": "5f5f734c454fd057a2b760cc704c791f56551f36",
+  "framework_branch": "feat/refinement",
+  "model_preparation_commit": "963ae54f1b1a2eecb229a18e39844fd6e726ab60",
+  "model_preparation_branch": "explore/pipeline/revision/2",
+  "browser_version": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+  "agent_browser_version": "agent-browser 0.36.0",
+  "os_environment": "Darwin 27.3.0 (arm64)",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "origin": "http://localhost:5199/?auiDiagnostics=1",
+  "trace_schema_version": "1.4.0",
+  "task_definition_version": "TD-v2",
+  "trials_per_task": 1,
   "conditions": [
     "baseline",
     "adaptive"
   ],
   "tasks": [
-    "T1",
-    "T2",
-    "T3"
+    "TD1",
+    "TD2",
+    "TD3",
+    "TD4"
   ],
-  "total_traces": 18,
   "claim_boundary": "Results from this dataset may be reported as: 'the dataset -> preparation -> training -> export -> runtime path executes end to end', 'the learned head loads in the browser and produces logits of the expected shape', and engineering and pipeline findings. Results from this dataset may NOT be reported as: evidence about human participants; evidence about usability, task performance, or intervention benefit; or evidence that learned intervention prediction outperforms the deterministic policy \u2014 a model trained on labels produced by that policy is being compared against its own teacher.",
+  "provenance_notice": "Every trace produced by this harness is scripted engineering evidence. It is not participant evidence and must not be pooled with participant traces.",
   "traces": [
     {
-      "filename": "experiment-trace-f523e5aa-1413-4c43-a55a-1b8c1ab31f7e-1790465162658.json",
-      "sessionId": "f523e5aa-1413-4c43-a55a-1b8c1ab31f7e",
-      "experimentId": "exp_muj0q00w",
+      "filename": "scripted-TD1-baseline-trial1.json",
+      "sessionId": "be1cffc5-e76a-44fa-a35e-287457c2225c",
+      "experimentId": "exp_mwkjz9pj",
       "conditionId": "baseline",
-      "taskId": "T1",
+      "taskId": "TD1",
       "trial": 1,
       "status": "Completed",
-      "durationMs": 9605,
-      "behaviourCount": 63,
-      "microTensorCount": 27,
-      "macroCount": 20,
-      "outcomeCount": 27,
-      "predictionCount": 6,
-      "interventionCount": 0,
-      "verified": true
+      "schemaVersion": "1.4.0",
+      "taskDefinitionVersion": "TD-v2",
+      "semanticOutcomeVocabularyVersion": "testbed-semantic/1.0.0",
+      "durationMs": 6327.510009765625,
+      "counts": {
+        "behaviourEvents": 44,
+        "microTensors": 17,
+        "outcomes": 17,
+        "predictions": 4,
+        "policyDecisions": 4,
+        "taskEvents": 7,
+        "interventionsApplied": 0
+      },
+      "semanticOutcomes": [
+        "open_filter_section",
+        "select_region",
+        "apply_filter",
+        "export_report"
+      ],
+      "measurements": {
+        "sawEmptyResult": false,
+        "status": "Completed",
+        "errors": 0,
+        "page": "Analytics",
+        "visibleRows": 18,
+        "region": "Europe",
+        "categories": [],
+        "currentReport": "",
+        "semanticOutcomes": [
+          "open_filter_section",
+          "select_region",
+          "apply_filter",
+          "export_report"
+        ],
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36"
+      },
+      "checks": {
+        "taskCompleted": true,
+        "zeroTaskErrors": true,
+        "expectedRows": 18,
+        "semanticOutcomes": [
+          "open_filter_section",
+          "select_region",
+          "apply_filter",
+          "export_report"
+        ],
+        "baselineZeroMutations": true,
+        "frameworkVerifier": true
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "result": "passed"
+        }
+      ],
+      "verified": true,
+      "failures": []
     },
     {
-      "filename": "experiment-trace-e16ebbf9-a03e-41c6-976d-5e1dbc9df891-1790465172017.json",
-      "sessionId": "e16ebbf9-a03e-41c6-976d-5e1dbc9df891",
-      "experimentId": "exp_muj0q00w",
+      "filename": "scripted-TD2-baseline-trial1.json",
+      "sessionId": "af482592-c224-4cec-a528-1e384e39fd33",
+      "experimentId": "exp_mwkjzf2l",
       "conditionId": "baseline",
-      "taskId": "T1",
-      "trial": 2,
-      "status": "In Progress",
-      "durationMs": 8974,
-      "behaviourCount": 53,
-      "microTensorCount": 26,
-      "macroCount": 18,
-      "outcomeCount": 26,
-      "predictionCount": 6,
-      "interventionCount": 0,
-      "verified": true
-    },
-    {
-      "filename": "experiment-trace-64fa9a6f-5297-450f-b5d2-5b9ba97fcd80-1790465181955.json",
-      "sessionId": "64fa9a6f-5297-450f-b5d2-5b9ba97fcd80",
-      "experimentId": "exp_muj0q00w",
-      "conditionId": "baseline",
-      "taskId": "T1",
-      "trial": 3,
-      "status": "Completed",
-      "durationMs": 9554,
-      "behaviourCount": 63,
-      "microTensorCount": 26,
-      "macroCount": 20,
-      "outcomeCount": 26,
-      "predictionCount": 6,
-      "interventionCount": 1,
-      "verified": true
-    },
-    {
-      "filename": "experiment-trace-7d8151b4-2bcd-4943-b789-27622c0fcf4e-1790465190177.json",
-      "sessionId": "7d8151b4-2bcd-4943-b789-27622c0fcf4e",
-      "experimentId": "exp_muj0q00w",
-      "conditionId": "baseline",
-      "taskId": "T2",
+      "taskId": "TD2",
       "trial": 1,
       "status": "Completed",
-      "durationMs": 7836,
-      "behaviourCount": 67,
-      "microTensorCount": 24,
-      "macroCount": 9,
-      "outcomeCount": 24,
-      "predictionCount": 6,
-      "interventionCount": 0,
-      "verified": true
+      "schemaVersion": "1.4.0",
+      "taskDefinitionVersion": "TD-v2",
+      "semanticOutcomeVocabularyVersion": "testbed-semantic/1.0.0",
+      "durationMs": 6138.39501953125,
+      "counts": {
+        "behaviourEvents": 36,
+        "microTensors": 17,
+        "outcomes": 17,
+        "predictions": 3,
+        "policyDecisions": 3,
+        "taskEvents": 7,
+        "interventionsApplied": 0
+      },
+      "semanticOutcomes": [
+        "select_date_range",
+        "open_filter_section",
+        "select_category",
+        "apply_filter"
+      ],
+      "measurements": {
+        "sawEmptyResult": false,
+        "status": "Completed",
+        "errors": 0,
+        "page": "Analytics",
+        "visibleRows": 5,
+        "dateFrom": "2025-06-01",
+        "categories": [
+          "books"
+        ],
+        "currentReport": "",
+        "semanticOutcomes": [
+          "select_date_range",
+          "open_filter_section",
+          "select_category",
+          "apply_filter"
+        ],
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36"
+      },
+      "checks": {
+        "taskCompleted": true,
+        "zeroTaskErrors": true,
+        "expectedRows": 5,
+        "semanticOutcomes": [
+          "select_date_range",
+          "open_filter_section",
+          "select_category",
+          "apply_filter"
+        ],
+        "baselineZeroMutations": true,
+        "frameworkVerifier": true
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "result": "passed"
+        }
+      ],
+      "verified": true,
+      "failures": []
     },
     {
-      "filename": "experiment-trace-cc07b52d-ac76-4c18-8220-e1cba91071c3-1790465198401.json",
-      "sessionId": "cc07b52d-ac76-4c18-8220-e1cba91071c3",
-      "experimentId": "exp_muj0q00w",
+      "filename": "scripted-TD3-baseline-trial1.json",
+      "sessionId": "a57751b6-47f9-4b98-b63d-949672581f21",
+      "experimentId": "exp_mwkjzkcz",
       "conditionId": "baseline",
-      "taskId": "T2",
-      "trial": 2,
-      "status": "Completed",
-      "durationMs": 7842,
-      "behaviourCount": 67,
-      "microTensorCount": 24,
-      "macroCount": 9,
-      "outcomeCount": 24,
-      "predictionCount": 6,
-      "interventionCount": 0,
-      "verified": true
-    },
-    {
-      "filename": "experiment-trace-ea889eb3-a8c4-497b-8a31-8a17d61b5040-1790465206631.json",
-      "sessionId": "ea889eb3-a8c4-497b-8a31-8a17d61b5040",
-      "experimentId": "exp_muj0q00w",
-      "conditionId": "baseline",
-      "taskId": "T2",
-      "trial": 3,
-      "status": "Completed",
-      "durationMs": 7838,
-      "behaviourCount": 67,
-      "microTensorCount": 23,
-      "macroCount": 9,
-      "outcomeCount": 23,
-      "predictionCount": 6,
-      "interventionCount": 0,
-      "verified": true
-    },
-    {
-      "filename": "experiment-trace-860ff863-ecfc-4bcb-9ff5-778b75f68d68-1790465213689.json",
-      "sessionId": "860ff863-ecfc-4bcb-9ff5-778b75f68d68",
-      "experimentId": "exp_muj0q00w",
-      "conditionId": "baseline",
-      "taskId": "T3",
-      "trial": 1,
-      "status": "In Progress",
-      "durationMs": 6668,
-      "behaviourCount": 52,
-      "microTensorCount": 20,
-      "macroCount": 14,
-      "outcomeCount": 20,
-      "predictionCount": 4,
-      "interventionCount": 1,
-      "verified": true
-    },
-    {
-      "filename": "experiment-trace-660e47c7-a1cf-41c4-bae0-fd7fe2d908fa-1790465220754.json",
-      "sessionId": "660e47c7-a1cf-41c4-bae0-fd7fe2d908fa",
-      "experimentId": "exp_muj0q00w",
-      "conditionId": "baseline",
-      "taskId": "T3",
-      "trial": 2,
-      "status": "In Progress",
-      "durationMs": 6676,
-      "behaviourCount": 52,
-      "microTensorCount": 20,
-      "macroCount": 14,
-      "outcomeCount": 20,
-      "predictionCount": 4,
-      "interventionCount": 1,
-      "verified": true
-    },
-    {
-      "filename": "experiment-trace-9282f192-b963-4b95-9b81-1302a7f27f18-1790465227839.json",
-      "sessionId": "9282f192-b963-4b95-9b81-1302a7f27f18",
-      "experimentId": "exp_muj0q00w",
-      "conditionId": "baseline",
-      "taskId": "T3",
-      "trial": 3,
-      "status": "In Progress",
-      "durationMs": 6683,
-      "behaviourCount": 52,
-      "microTensorCount": 20,
-      "macroCount": 14,
-      "outcomeCount": 20,
-      "predictionCount": 3,
-      "interventionCount": 1,
-      "verified": true
-    },
-    {
-      "filename": "experiment-trace-fd9b69db-488e-47d8-b424-4d2757a44bf7-1790465237220.json",
-      "sessionId": "fd9b69db-488e-47d8-b424-4d2757a44bf7",
-      "experimentId": "exp_muj0q00w",
-      "conditionId": "adaptive",
-      "taskId": "T1",
-      "trial": 1,
-      "status": "In Progress",
-      "durationMs": 8978,
-      "behaviourCount": 53,
-      "microTensorCount": 26,
-      "macroCount": 18,
-      "outcomeCount": 26,
-      "predictionCount": 6,
-      "interventionCount": 0,
-      "verified": true
-    },
-    {
-      "filename": "experiment-trace-514f01c3-7c09-443d-964f-7a52c17bab74-1790465247179.json",
-      "sessionId": "514f01c3-7c09-443d-964f-7a52c17bab74",
-      "experimentId": "exp_muj0q00w",
-      "conditionId": "adaptive",
-      "taskId": "T1",
-      "trial": 2,
-      "status": "Completed",
-      "durationMs": 9564,
-      "behaviourCount": 63,
-      "microTensorCount": 27,
-      "macroCount": 20,
-      "outcomeCount": 27,
-      "predictionCount": 7,
-      "interventionCount": 0,
-      "verified": true
-    },
-    {
-      "filename": "experiment-trace-b2eeed1e-017a-4295-befe-b86e37932391-1790465256598.json",
-      "sessionId": "b2eeed1e-017a-4295-befe-b86e37932391",
-      "experimentId": "exp_muj0q00w",
-      "conditionId": "adaptive",
-      "taskId": "T1",
-      "trial": 3,
-      "status": "In Progress",
-      "durationMs": 8987,
-      "behaviourCount": 53,
-      "microTensorCount": 26,
-      "macroCount": 18,
-      "outcomeCount": 26,
-      "predictionCount": 6,
-      "interventionCount": 0,
-      "verified": true
-    },
-    {
-      "filename": "experiment-trace-f6a91ab6-e8f6-4920-b980-6553d21588c5-1790465264851.json",
-      "sessionId": "f6a91ab6-e8f6-4920-b980-6553d21588c5",
-      "experimentId": "exp_muj0q00w",
-      "conditionId": "adaptive",
-      "taskId": "T2",
+      "taskId": "TD3",
       "trial": 1,
       "status": "Completed",
-      "durationMs": 7857,
-      "behaviourCount": 67,
-      "microTensorCount": 22,
-      "macroCount": 9,
-      "outcomeCount": 22,
-      "predictionCount": 5,
-      "interventionCount": 0,
-      "verified": true
+      "schemaVersion": "1.4.0",
+      "taskDefinitionVersion": "TD-v2",
+      "semanticOutcomeVocabularyVersion": "testbed-semantic/1.0.0",
+      "durationMs": 9385.2548828125,
+      "counts": {
+        "behaviourEvents": 58,
+        "microTensors": 28,
+        "outcomes": 28,
+        "predictions": 4,
+        "policyDecisions": 4,
+        "taskEvents": 10,
+        "interventionsApplied": 0
+      },
+      "semanticOutcomes": [
+        "select_region",
+        "open_filter_section",
+        "select_category",
+        "select_date_range",
+        "apply_filter",
+        "reset_filter"
+      ],
+      "measurements": {
+        "sawEmptyResult": true,
+        "status": "Completed",
+        "errors": 0,
+        "page": "Analytics",
+        "visibleRows": 50,
+        "region": "All",
+        "dateFrom": "",
+        "categories": [],
+        "currentReport": "",
+        "semanticOutcomes": [
+          "select_region",
+          "open_filter_section",
+          "select_category",
+          "select_date_range",
+          "apply_filter",
+          "reset_filter"
+        ],
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36"
+      },
+      "checks": {
+        "taskCompleted": true,
+        "zeroTaskErrors": true,
+        "expectedRows": 50,
+        "semanticOutcomes": [
+          "select_region",
+          "open_filter_section",
+          "select_category",
+          "select_date_range",
+          "apply_filter",
+          "reset_filter"
+        ],
+        "baselineZeroMutations": true,
+        "frameworkVerifier": true
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "result": "passed"
+        }
+      ],
+      "verified": true,
+      "failures": []
     },
     {
-      "filename": "experiment-trace-497766d9-f4ae-40ae-b38a-54ac574b3cad-1790465273101.json",
-      "sessionId": "497766d9-f4ae-40ae-b38a-54ac574b3cad",
-      "experimentId": "exp_muj0q00w",
-      "conditionId": "adaptive",
-      "taskId": "T2",
-      "trial": 2,
-      "status": "Completed",
-      "durationMs": 7851,
-      "behaviourCount": 67,
-      "microTensorCount": 23,
-      "macroCount": 9,
-      "outcomeCount": 23,
-      "predictionCount": 6,
-      "interventionCount": 0,
-      "verified": true
-    },
-    {
-      "filename": "experiment-trace-a0acb4d2-f5e0-4e96-a011-b25f13e0c4b4-1790465281348.json",
-      "sessionId": "a0acb4d2-f5e0-4e96-a011-b25f13e0c4b4",
-      "experimentId": "exp_muj0q00w",
-      "conditionId": "adaptive",
-      "taskId": "T2",
-      "trial": 3,
-      "status": "Completed",
-      "durationMs": 7850,
-      "behaviourCount": 67,
-      "microTensorCount": 22,
-      "macroCount": 9,
-      "outcomeCount": 22,
-      "predictionCount": 5,
-      "interventionCount": 0,
-      "verified": true
-    },
-    {
-      "filename": "experiment-trace-ef41ca1f-b253-4da4-943b-c0e14def8a2c-1790465288424.json",
-      "sessionId": "ef41ca1f-b253-4da4-943b-c0e14def8a2c",
-      "experimentId": "exp_muj0q00w",
-      "conditionId": "adaptive",
-      "taskId": "T3",
+      "filename": "scripted-TD4-baseline-trial1.json",
+      "sessionId": "3a555483-a593-443e-8cd2-99b972d3a2bd",
+      "experimentId": "exp_mwkjzs2f",
+      "conditionId": "baseline",
+      "taskId": "TD4",
       "trial": 1,
-      "status": "In Progress",
-      "durationMs": 6683,
-      "behaviourCount": 52,
-      "microTensorCount": 20,
-      "macroCount": 14,
-      "outcomeCount": 20,
-      "predictionCount": 3,
-      "interventionCount": 1,
-      "verified": true
+      "status": "Completed",
+      "schemaVersion": "1.4.0",
+      "taskDefinitionVersion": "TD-v2",
+      "semanticOutcomeVocabularyVersion": "testbed-semantic/1.0.0",
+      "durationMs": 5273.449951171875,
+      "counts": {
+        "behaviourEvents": 41,
+        "microTensors": 13,
+        "outcomes": 13,
+        "predictions": 3,
+        "policyDecisions": 3,
+        "taskEvents": 6,
+        "interventionsApplied": 0
+      },
+      "semanticOutcomes": [
+        "navigate_reports",
+        "select_report",
+        "export_report"
+      ],
+      "measurements": {
+        "sawEmptyResult": false,
+        "status": "Completed",
+        "errors": 0,
+        "page": "Analytics",
+        "visibleRows": 6,
+        "categories": [],
+        "currentReport": "Report: Europe Books",
+        "semanticOutcomes": [
+          "navigate_reports",
+          "select_report",
+          "export_report"
+        ],
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36"
+      },
+      "checks": {
+        "taskCompleted": true,
+        "zeroTaskErrors": true,
+        "expectedRows": 6,
+        "semanticOutcomes": [
+          "navigate_reports",
+          "select_report",
+          "export_report"
+        ],
+        "baselineZeroMutations": true,
+        "frameworkVerifier": true
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "result": "passed"
+        }
+      ],
+      "verified": true,
+      "failures": []
     },
     {
-      "filename": "experiment-trace-3a08d0f5-3807-4298-9769-a3172408b02c-1790465295499.json",
-      "sessionId": "3a08d0f5-3807-4298-9769-a3172408b02c",
-      "experimentId": "exp_muj0q00w",
+      "filename": "scripted-TD1-adaptive-trial1.json",
+      "sessionId": "b4bb06e4-e5cb-4d6d-bbb1-9935efdb974b",
+      "experimentId": "exp_mwkjzwfn",
       "conditionId": "adaptive",
-      "taskId": "T3",
-      "trial": 2,
-      "status": "In Progress",
-      "durationMs": 6682,
-      "behaviourCount": 52,
-      "microTensorCount": 19,
-      "macroCount": 14,
-      "outcomeCount": 19,
-      "predictionCount": 4,
-      "interventionCount": 0,
-      "verified": true
+      "taskId": "TD1",
+      "trial": 1,
+      "status": "Completed",
+      "schemaVersion": "1.4.0",
+      "taskDefinitionVersion": "TD-v2",
+      "semanticOutcomeVocabularyVersion": "testbed-semantic/1.0.0",
+      "durationMs": 6007.360107421875,
+      "counts": {
+        "behaviourEvents": 44,
+        "microTensors": 17,
+        "outcomes": 17,
+        "predictions": 4,
+        "policyDecisions": 4,
+        "taskEvents": 7,
+        "interventionsApplied": 0
+      },
+      "semanticOutcomes": [
+        "open_filter_section",
+        "select_region",
+        "apply_filter",
+        "export_report"
+      ],
+      "measurements": {
+        "sawEmptyResult": false,
+        "status": "Completed",
+        "errors": 0,
+        "page": "Analytics",
+        "visibleRows": 18,
+        "region": "Europe",
+        "categories": [],
+        "currentReport": "",
+        "semanticOutcomes": [
+          "open_filter_section",
+          "select_region",
+          "apply_filter",
+          "export_report"
+        ],
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36"
+      },
+      "checks": {
+        "taskCompleted": true,
+        "zeroTaskErrors": true,
+        "expectedRows": 18,
+        "semanticOutcomes": [
+          "open_filter_section",
+          "select_region",
+          "apply_filter",
+          "export_report"
+        ],
+        "baselineZeroMutations": true,
+        "frameworkVerifier": true
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "result": "passed"
+        }
+      ],
+      "verified": true,
+      "failures": []
     },
     {
-      "filename": "experiment-trace-290806e2-122c-44c3-ae06-76f2f1be7019-1790465302578.json",
-      "sessionId": "290806e2-122c-44c3-ae06-76f2f1be7019",
-      "experimentId": "exp_muj0q00w",
+      "filename": "scripted-TD2-adaptive-trial1.json",
+      "sessionId": "a1cd2c96-5547-47e6-b702-00aee9790ca9",
+      "experimentId": "exp_mwkk01cj",
       "conditionId": "adaptive",
-      "taskId": "T3",
-      "trial": 3,
-      "status": "In Progress",
-      "durationMs": 6679,
-      "behaviourCount": 52,
-      "microTensorCount": 20,
-      "macroCount": 14,
-      "outcomeCount": 20,
-      "predictionCount": 3,
-      "interventionCount": 1,
-      "verified": true
+      "taskId": "TD2",
+      "trial": 1,
+      "status": "Completed",
+      "schemaVersion": "1.4.0",
+      "taskDefinitionVersion": "TD-v2",
+      "semanticOutcomeVocabularyVersion": "testbed-semantic/1.0.0",
+      "durationMs": 5809.52490234375,
+      "counts": {
+        "behaviourEvents": 36,
+        "microTensors": 18,
+        "outcomes": 18,
+        "predictions": 4,
+        "policyDecisions": 4,
+        "taskEvents": 7,
+        "interventionsApplied": 0
+      },
+      "semanticOutcomes": [
+        "select_date_range",
+        "open_filter_section",
+        "select_category",
+        "apply_filter"
+      ],
+      "measurements": {
+        "sawEmptyResult": false,
+        "status": "Completed",
+        "errors": 0,
+        "page": "Analytics",
+        "visibleRows": 5,
+        "dateFrom": "2025-06-01",
+        "categories": [
+          "books"
+        ],
+        "currentReport": "",
+        "semanticOutcomes": [
+          "select_date_range",
+          "open_filter_section",
+          "select_category",
+          "apply_filter"
+        ],
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36"
+      },
+      "checks": {
+        "taskCompleted": true,
+        "zeroTaskErrors": true,
+        "expectedRows": 5,
+        "semanticOutcomes": [
+          "select_date_range",
+          "open_filter_section",
+          "select_category",
+          "apply_filter"
+        ],
+        "baselineZeroMutations": true,
+        "frameworkVerifier": true
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "result": "passed"
+        }
+      ],
+      "verified": true,
+      "failures": []
+    },
+    {
+      "filename": "scripted-TD3-adaptive-trial1.json",
+      "sessionId": "d9ac2b94-6b9d-4e47-a584-d8036400efdc",
+      "experimentId": "exp_mwkk069z",
+      "conditionId": "adaptive",
+      "taskId": "TD3",
+      "trial": 1,
+      "status": "Completed",
+      "schemaVersion": "1.4.0",
+      "taskDefinitionVersion": "TD-v2",
+      "semanticOutcomeVocabularyVersion": "testbed-semantic/1.0.0",
+      "durationMs": 9008.885009765625,
+      "counts": {
+        "behaviourEvents": 58,
+        "microTensors": 28,
+        "outcomes": 28,
+        "predictions": 4,
+        "policyDecisions": 4,
+        "taskEvents": 10,
+        "interventionsApplied": 0
+      },
+      "semanticOutcomes": [
+        "select_region",
+        "open_filter_section",
+        "select_category",
+        "select_date_range",
+        "apply_filter",
+        "reset_filter"
+      ],
+      "measurements": {
+        "sawEmptyResult": true,
+        "status": "Completed",
+        "errors": 0,
+        "page": "Analytics",
+        "visibleRows": 50,
+        "region": "All",
+        "dateFrom": "",
+        "categories": [],
+        "currentReport": "",
+        "semanticOutcomes": [
+          "select_region",
+          "open_filter_section",
+          "select_category",
+          "select_date_range",
+          "apply_filter",
+          "reset_filter"
+        ],
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36"
+      },
+      "checks": {
+        "taskCompleted": true,
+        "zeroTaskErrors": true,
+        "expectedRows": 50,
+        "semanticOutcomes": [
+          "select_region",
+          "open_filter_section",
+          "select_category",
+          "select_date_range",
+          "apply_filter",
+          "reset_filter"
+        ],
+        "baselineZeroMutations": true,
+        "frameworkVerifier": true
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "result": "passed"
+        }
+      ],
+      "verified": true,
+      "failures": []
+    },
+    {
+      "filename": "scripted-TD4-adaptive-trial1.json",
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "taskId": "TD4",
+      "trial": 1,
+      "status": "Completed",
+      "schemaVersion": "1.4.0",
+      "taskDefinitionVersion": "TD-v2",
+      "semanticOutcomeVocabularyVersion": "testbed-semantic/1.0.0",
+      "durationMs": 5046.22998046875,
+      "counts": {
+        "behaviourEvents": 41,
+        "microTensors": 16,
+        "outcomes": 16,
+        "predictions": 4,
+        "policyDecisions": 4,
+        "taskEvents": 6,
+        "interventionsApplied": 0
+      },
+      "semanticOutcomes": [
+        "navigate_reports",
+        "select_report",
+        "export_report"
+      ],
+      "measurements": {
+        "sawEmptyResult": false,
+        "status": "Completed",
+        "errors": 0,
+        "page": "Analytics",
+        "visibleRows": 6,
+        "categories": [],
+        "currentReport": "Report: Europe Books",
+        "semanticOutcomes": [
+          "navigate_reports",
+          "select_report",
+          "export_report"
+        ],
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36"
+      },
+      "checks": {
+        "taskCompleted": true,
+        "zeroTaskErrors": true,
+        "expectedRows": 6,
+        "semanticOutcomes": [
+          "navigate_reports",
+          "select_report",
+          "export_report"
+        ],
+        "baselineZeroMutations": true,
+        "frameworkVerifier": true
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "result": "passed"
+        }
+      ],
+      "verified": true,
+      "failures": []
     }
-  ]
+  ],
+  "failures": []
 }

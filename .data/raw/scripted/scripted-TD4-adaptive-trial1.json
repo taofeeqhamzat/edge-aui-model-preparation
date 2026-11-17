@@ -1,0 +1,2436 @@
+{
+  "schemaVersion": "1.4.0",
+  "exportedAt": "2026-11-17T10:33:03.491Z",
+  "session": {
+    "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+    "startedAt": 60.24500000476837,
+    "startedAtEpochMs": 1794911578445,
+    "experimentId": "exp_mwkk0dos",
+    "conditionId": "adaptive",
+    "provenance": "scripted",
+    "participantId": null
+  },
+  "task": {
+    "currentTaskId": "TD4",
+    "status": "Completed",
+    "currentStepIndex": 4,
+    "completedSteps": [
+      "TD4-1",
+      "TD4-2",
+      "TD4-3",
+      "TD4-4"
+    ],
+    "errors": 0,
+    "definitionVersion": "TD-v2",
+    "uiState": {
+      "page": "Analytics",
+      "appliedFilters": {
+        "dateFrom": "",
+        "region": "Europe",
+        "categories": [
+          "Books"
+        ]
+      },
+      "visibleRowCount": 6,
+      "empty": false,
+      "currentReportId": "eu-books",
+      "visitedReportIds": [
+        "eu-electronics",
+        "eu-books"
+      ]
+    },
+    "startTime": 1794911579145.46,
+    "endTime": 1794911582739.755
+  },
+  "metadata": {
+    "durationMs": 5046.22998046875,
+    "totalEvents": 100,
+    "behaviourCount": 41,
+    "microTensorCount": 16,
+    "macroCount": 13,
+    "outcomeCount": 16,
+    "predictionCount": 4,
+    "interventionCount": 0,
+    "policyDecisionCount": 4,
+    "taskEventCount": 6,
+    "finalTaskStatus": "Completed",
+    "experimentId": "exp_mwkk0dos",
+    "conditionId": "adaptive",
+    "uiVersion": "1.0.0",
+    "settlementDelayMs": 250,
+    "effectiveConfig": {
+      "telemetry": {
+        "enabledEventTypes": [
+          "mousemove",
+          "mousedown",
+          "mouseup",
+          "click",
+          "scroll",
+          "input",
+          "change",
+          "submit"
+        ],
+        "sampleIntervalMs": 0,
+        "captureGeometry": true,
+        "maxBufferSize": 10000,
+        "sessionSettings": {
+          "idleTimeoutMs": 1800000,
+          "storagePrefix": "edge_aui_"
+        }
+      },
+      "windowing": {
+        "windowDurationMs": 500,
+        "strideMs": 250,
+        "minEventCount": 3,
+        "inactivityThresholdMs": 2000,
+        "lateEventPolicy": "settle",
+        "settlementDelayMs": 250,
+        "pendingOutcomeGraceMs": 2000,
+        "emitInactiveWindows": true
+      },
+      "microtensor": {
+        "schemaVersion": "1.0.0",
+        "inputDim": 18,
+        "featureNames": [
+          "meanVelocity",
+          "maxVelocity",
+          "meanAcceleration",
+          "hesitationCount",
+          "totalTrajectoryLength",
+          "dwellTimeMs",
+          "trajectoryEntropy",
+          "scrollDepthPercentage",
+          "scrollVelocity"
+        ],
+        "normalization": {
+          "mean_velocity_scale": 10,
+          "max_velocity_scale": 10,
+          "mean_acceleration_scale": 1,
+          "hesitation_scale": 25,
+          "trajectory_scale": 2000,
+          "scroll_velocity_scale": 5
+        }
+      },
+      "macro": {
+        "groupingIntervalMs": 2000,
+        "maxHistoryLength": 400,
+        "maxRecentSymbols": 6,
+        "recentSequenceLookback": 40
+      },
+      "fastGate": {
+        "miner": "wasm",
+        "minSupport": 1,
+        "minConfidence": 0.6,
+        "maxPatternLength": 4,
+        "maxPatterns": 32,
+        "maxCorpusSequences": 40,
+        "miningTimeoutMs": 1500,
+        "rpcTimeoutMs": 3000,
+        "rankingStrategy": "confidence",
+        "patternInterventionMap": {
+          "OPEN_FILTERS > APPLY_FILTER": "highlight_primary_action",
+          "NAV_ANALYTICS > OPEN_FILTERS": "simplify_options",
+          "NAV_ANALYTICS > OPEN_FILTERS > APPLY_FILTER": "highlight_primary_action",
+          "SELECT_DATE > OPEN_FILTERS > SELECT_REGION > APPLY_FILTER": "highlight_primary_action",
+          "HOVER_KPI > HOVER_KPI": "expand_tooltip"
+        }
+      },
+      "slowGate": {
+        "modelPath": "/models/gru_edge_aui.onnx",
+        "executionProvider": "auto",
+        "sequenceLength": 8,
+        "batchSize": 1,
+        "confidenceThreshold": 0.75,
+        "targetContextEncoding": "R6",
+        "fallbackBehavior": "mock",
+        "enabled": true
+      },
+      "policy": {
+        "confidenceThreshold": 0.75,
+        "requiredConsecutiveWindows": 2,
+        "sustainedConfidenceDurationMs": 500,
+        "cooldownMs": 5000,
+        "dismissalCooldownMs": 15000,
+        "ttlMs": 8000,
+        "maxInterventionsPerTask": 2,
+        "conflictResolution": "highest_confidence",
+        "enforceContextEligibility": true
+      },
+      "actuation": {
+        "defaultMechanism": "css_class",
+        "defaultTtlMs": 8000,
+        "revertBehavior": "on_reset",
+        "defaultAssistanceText": "Can we help with this step?"
+      },
+      "experiment": {
+        "experimentId": "exp_mwkk0dos",
+        "conditionId": "adaptive",
+        "trialOrder": [
+          "TD1",
+          "TD2",
+          "TD3",
+          "TD4"
+        ],
+        "taskTimeoutsMs": {
+          "TD1": 120000,
+          "TD2": 120000,
+          "TD3": 150000,
+          "TD4": 150000
+        },
+        "traceSchemaVersion": "1.4.0"
+      }
+    },
+    "clock": "epoch_ms",
+    "provenance": "scripted",
+    "applicationVersion": "0.1.0",
+    "modelVersion": "TargetInterventionHead-v1.0.0-int8",
+    "executionProvider": "wasm",
+    "policyVersion": "1.0.0",
+    "taskDefinitionVersion": "TD-v2",
+    "semanticOutcomeVocabularyVersion": "testbed-semantic/1.0.0",
+    "predictionContractVersion": "1.0.0",
+    "mining": {
+      "executed": 0,
+      "skipped": 0,
+      "superseded": 0,
+      "timedOut": 0,
+      "droppedWindows": 0
+    },
+    "evictions": {
+      "total": 0,
+      "byBuffer": {
+        "behaviourEvents": 0,
+        "microTensors": 0,
+        "macroInteractions": 0,
+        "outcomes": 0,
+        "predictions": 0,
+        "policyDecisions": 0,
+        "interventions": 0,
+        "taskEvents": 0
+      },
+      "truncated": false
+    },
+    "integrityWarnings": []
+  },
+  "effectiveConfig": {
+    "telemetry": {
+      "enabledEventTypes": [
+        "mousemove",
+        "mousedown",
+        "mouseup",
+        "click",
+        "scroll",
+        "input",
+        "change",
+        "submit"
+      ],
+      "sampleIntervalMs": 0,
+      "captureGeometry": true,
+      "maxBufferSize": 10000,
+      "sessionSettings": {
+        "idleTimeoutMs": 1800000,
+        "storagePrefix": "edge_aui_"
+      }
+    },
+    "windowing": {
+      "windowDurationMs": 500,
+      "strideMs": 250,
+      "minEventCount": 3,
+      "inactivityThresholdMs": 2000,
+      "lateEventPolicy": "settle",
+      "settlementDelayMs": 250,
+      "pendingOutcomeGraceMs": 2000,
+      "emitInactiveWindows": true
+    },
+    "microtensor": {
+      "schemaVersion": "1.0.0",
+      "inputDim": 18,
+      "featureNames": [
+        "meanVelocity",
+        "maxVelocity",
+        "meanAcceleration",
+        "hesitationCount",
+        "totalTrajectoryLength",
+        "dwellTimeMs",
+        "trajectoryEntropy",
+        "scrollDepthPercentage",
+        "scrollVelocity"
+      ],
+      "normalization": {
+        "mean_velocity_scale": 10,
+        "max_velocity_scale": 10,
+        "mean_acceleration_scale": 1,
+        "hesitation_scale": 25,
+        "trajectory_scale": 2000,
+        "scroll_velocity_scale": 5
+      }
+    },
+    "macro": {
+      "groupingIntervalMs": 2000,
+      "maxHistoryLength": 400,
+      "maxRecentSymbols": 6,
+      "recentSequenceLookback": 40
+    },
+    "fastGate": {
+      "miner": "wasm",
+      "minSupport": 1,
+      "minConfidence": 0.6,
+      "maxPatternLength": 4,
+      "maxPatterns": 32,
+      "maxCorpusSequences": 40,
+      "miningTimeoutMs": 1500,
+      "rpcTimeoutMs": 3000,
+      "rankingStrategy": "confidence",
+      "patternInterventionMap": {
+        "OPEN_FILTERS > APPLY_FILTER": "highlight_primary_action",
+        "NAV_ANALYTICS > OPEN_FILTERS": "simplify_options",
+        "NAV_ANALYTICS > OPEN_FILTERS > APPLY_FILTER": "highlight_primary_action",
+        "SELECT_DATE > OPEN_FILTERS > SELECT_REGION > APPLY_FILTER": "highlight_primary_action",
+        "HOVER_KPI > HOVER_KPI": "expand_tooltip"
+      }
+    },
+    "slowGate": {
+      "modelPath": "/models/gru_edge_aui.onnx",
+      "executionProvider": "auto",
+      "sequenceLength": 8,
+      "batchSize": 1,
+      "confidenceThreshold": 0.75,
+      "targetContextEncoding": "R6",
+      "fallbackBehavior": "mock",
+      "enabled": true
+    },
+    "policy": {
+      "confidenceThreshold": 0.75,
+      "requiredConsecutiveWindows": 2,
+      "sustainedConfidenceDurationMs": 500,
+      "cooldownMs": 5000,
+      "dismissalCooldownMs": 15000,
+      "ttlMs": 8000,
+      "maxInterventionsPerTask": 2,
+      "conflictResolution": "highest_confidence",
+      "enforceContextEligibility": true
+    },
+    "actuation": {
+      "defaultMechanism": "css_class",
+      "defaultTtlMs": 8000,
+      "revertBehavior": "on_reset",
+      "defaultAssistanceText": "Can we help with this step?"
+    },
+    "experiment": {
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "trialOrder": [
+        "TD1",
+        "TD2",
+        "TD3",
+        "TD4"
+      ],
+      "taskTimeoutsMs": {
+        "TD1": 120000,
+        "TD2": 120000,
+        "TD3": 150000,
+        "TD4": 150000
+      },
+      "traceSchemaVersion": "1.4.0"
+    }
+  },
+  "behaviourEvents": [
+    {
+      "timestamp": 1794911579226.225,
+      "type": "mousemove",
+      "x": 0.5359375,
+      "y": 0.48148148148148145,
+      "route": "Reports",
+      "taskId": "TD4",
+      "taskStepId": "TD4-1",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911579242.665,
+      "type": "mousemove",
+      "x": 0.5723958333333333,
+      "y": 0.46296296296296297,
+      "route": "Reports",
+      "taskId": "TD4",
+      "taskStepId": "TD4-1",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911579259.495,
+      "type": "mousemove",
+      "x": 0.6083333333333333,
+      "y": 0.4444444444444444,
+      "route": "Reports",
+      "taskId": "TD4",
+      "taskStepId": "TD4-1",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911579276.075,
+      "type": "mousemove",
+      "x": 0.6442708333333333,
+      "y": 0.425,
+      "route": "Reports",
+      "taskId": "TD4",
+      "taskStepId": "TD4-1",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911579292.835,
+      "type": "mousemove",
+      "x": 0.6807291666666667,
+      "y": 0.4064814814814815,
+      "route": "Reports",
+      "taskId": "TD4",
+      "taskStepId": "TD4-1",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911579309.275,
+      "type": "mousemove",
+      "x": 0.7166666666666667,
+      "y": 0.38796296296296295,
+      "route": "Reports",
+      "taskId": "TD4",
+      "taskStepId": "TD4-1",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911579326.155,
+      "type": "mouseover",
+      "x": 0.7166666666666667,
+      "y": 0.38796296296296295,
+      "componentId": "open-report-eu-electronics",
+      "componentRole": "secondary-action",
+      "action": "click",
+      "route": "Reports",
+      "taskId": "TD4",
+      "taskStepId": "TD4-1",
+      "targetTag": "button",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911579326.415,
+      "type": "mousedown",
+      "x": 0.7166666666666667,
+      "y": 0.38796296296296295,
+      "componentId": "open-report-eu-electronics",
+      "componentRole": "secondary-action",
+      "action": "click",
+      "route": "Reports",
+      "taskId": "TD4",
+      "taskStepId": "TD4-1",
+      "targetTag": "button",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911579367.905,
+      "type": "mouseup",
+      "x": 0.7166666666666667,
+      "y": 0.38796296296296295,
+      "componentId": "open-report-eu-electronics",
+      "componentRole": "secondary-action",
+      "action": "click",
+      "route": "Reports",
+      "taskId": "TD4",
+      "taskStepId": "TD4-1",
+      "targetTag": "button",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911579368.015,
+      "type": "click",
+      "x": 0.7166666666666667,
+      "y": 0.38796296296296295,
+      "componentId": "open-report-eu-electronics",
+      "componentRole": "secondary-action",
+      "action": "click",
+      "route": "Reports",
+      "taskId": "TD4",
+      "taskStepId": "TD4-1",
+      "targetTag": "button",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911580350.195,
+      "type": "mousemove",
+      "x": 0.4505208333333333,
+      "y": 0.4444444444444444,
+      "route": "Analytics",
+      "taskId": "TD4",
+      "taskStepId": "TD4-2",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911580366.4,
+      "type": "mousemove",
+      "x": 0.4010416666666667,
+      "y": 0.3888888888888889,
+      "route": "Analytics",
+      "taskId": "TD4",
+      "taskStepId": "TD4-2",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911580382.565,
+      "type": "mousemove",
+      "x": 0.35208333333333336,
+      "y": 0.3333333333333333,
+      "route": "Analytics",
+      "taskId": "TD4",
+      "taskStepId": "TD4-2",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911580398.725,
+      "type": "mousemove",
+      "x": 0.3026041666666667,
+      "y": 0.27685185185185185,
+      "route": "Analytics",
+      "taskId": "TD4",
+      "taskStepId": "TD4-2",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911580415.025,
+      "type": "mousemove",
+      "x": 0.253125,
+      "y": 0.2212962962962963,
+      "route": "Analytics",
+      "taskId": "TD4",
+      "taskStepId": "TD4-2",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911580431.125,
+      "type": "mousemove",
+      "x": 0.20364583333333333,
+      "y": 0.16574074074074074,
+      "route": "Analytics",
+      "taskId": "TD4",
+      "taskStepId": "TD4-2",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911580447.85,
+      "type": "mouseover",
+      "x": 0.20364583333333333,
+      "y": 0.16574074074074074,
+      "componentId": "nav-Reports",
+      "componentRole": "navigation",
+      "action": "click",
+      "route": "Analytics",
+      "taskId": "TD4",
+      "taskStepId": "TD4-2",
+      "targetTag": "button",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911580447.95,
+      "type": "mousedown",
+      "x": 0.20364583333333333,
+      "y": 0.16574074074074074,
+      "componentId": "nav-Reports",
+      "componentRole": "navigation",
+      "action": "click",
+      "route": "Analytics",
+      "taskId": "TD4",
+      "taskStepId": "TD4-2",
+      "targetTag": "button",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911580489.095,
+      "type": "mouseup",
+      "x": 0.20364583333333333,
+      "y": 0.16574074074074074,
+      "componentId": "nav-Reports",
+      "componentRole": "navigation",
+      "action": "click",
+      "route": "Analytics",
+      "taskId": "TD4",
+      "taskStepId": "TD4-2",
+      "targetTag": "button",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911580489.175,
+      "type": "click",
+      "x": 0.20364583333333333,
+      "y": 0.16574074074074074,
+      "componentId": "nav-Reports",
+      "componentRole": "navigation",
+      "action": "click",
+      "route": "Analytics",
+      "taskId": "TD4",
+      "taskStepId": "TD4-2",
+      "targetTag": "button",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911581472.315,
+      "type": "mousemove",
+      "x": 0.5359375,
+      "y": 0.4888888888888889,
+      "route": "Reports",
+      "taskId": "TD4",
+      "taskStepId": "TD4-3",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911581488.95,
+      "type": "mousemove",
+      "x": 0.5723958333333333,
+      "y": 0.4777777777777778,
+      "route": "Reports",
+      "taskId": "TD4",
+      "taskStepId": "TD4-3",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911581505.125,
+      "type": "mousemove",
+      "x": 0.6083333333333333,
+      "y": 0.4666666666666667,
+      "route": "Reports",
+      "taskId": "TD4",
+      "taskStepId": "TD4-3",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911581521.29,
+      "type": "mousemove",
+      "x": 0.6442708333333333,
+      "y": 0.4546296296296296,
+      "route": "Reports",
+      "taskId": "TD4",
+      "taskStepId": "TD4-3",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911581537.42,
+      "type": "mousemove",
+      "x": 0.6807291666666667,
+      "y": 0.44351851851851853,
+      "route": "Reports",
+      "taskId": "TD4",
+      "taskStepId": "TD4-3",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911581554.585,
+      "type": "mousemove",
+      "x": 0.7166666666666667,
+      "y": 0.4324074074074074,
+      "route": "Reports",
+      "taskId": "TD4",
+      "taskStepId": "TD4-3",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911581570.945,
+      "type": "mouseover",
+      "x": 0.7166666666666667,
+      "y": 0.4324074074074074,
+      "componentId": "open-report-eu-books",
+      "componentRole": "secondary-action",
+      "action": "click",
+      "route": "Reports",
+      "taskId": "TD4",
+      "taskStepId": "TD4-3",
+      "targetTag": "button",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911581571.32,
+      "type": "mousedown",
+      "x": 0.7166666666666667,
+      "y": 0.4324074074074074,
+      "componentId": "open-report-eu-books",
+      "componentRole": "secondary-action",
+      "action": "click",
+      "route": "Reports",
+      "taskId": "TD4",
+      "taskStepId": "TD4-3",
+      "targetTag": "button",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911581612.935,
+      "type": "mouseup",
+      "x": 0.7166666666666667,
+      "y": 0.4324074074074074,
+      "componentId": "open-report-eu-books",
+      "componentRole": "secondary-action",
+      "action": "click",
+      "route": "Reports",
+      "taskId": "TD4",
+      "taskStepId": "TD4-3",
+      "targetTag": "button",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911581613.325,
+      "type": "click",
+      "x": 0.7166666666666667,
+      "y": 0.4324074074074074,
+      "componentId": "open-report-eu-books",
+      "componentRole": "secondary-action",
+      "action": "click",
+      "route": "Reports",
+      "taskId": "TD4",
+      "taskStepId": "TD4-3",
+      "targetTag": "button",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911582597.765,
+      "type": "mousemove",
+      "x": 0.5505208333333333,
+      "y": 0.4962962962962963,
+      "route": "Analytics",
+      "taskId": "TD4",
+      "taskStepId": "TD4-4",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911582614.49,
+      "type": "mousemove",
+      "x": 0.6010416666666667,
+      "y": 0.4925925925925926,
+      "route": "Analytics",
+      "taskId": "TD4",
+      "taskStepId": "TD4-4",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911582630.94,
+      "type": "mousemove",
+      "x": 0.6520833333333333,
+      "y": 0.4888888888888889,
+      "route": "Analytics",
+      "taskId": "TD4",
+      "taskStepId": "TD4-4",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911582647.215,
+      "type": "mousemove",
+      "x": 0.7026041666666667,
+      "y": 0.48518518518518516,
+      "route": "Analytics",
+      "taskId": "TD4",
+      "taskStepId": "TD4-4",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911582663.695,
+      "type": "mousemove",
+      "x": 0.753125,
+      "y": 0.48148148148148145,
+      "route": "Analytics",
+      "taskId": "TD4",
+      "taskStepId": "TD4-4",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911582680.96,
+      "type": "mousemove",
+      "x": 0.8036458333333333,
+      "y": 0.4777777777777778,
+      "route": "Analytics",
+      "taskId": "TD4",
+      "taskStepId": "TD4-4",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911582697.43,
+      "type": "mouseover",
+      "x": 0.8036458333333333,
+      "y": 0.4777777777777778,
+      "componentId": "btn-export",
+      "componentRole": "primary-action",
+      "action": "click",
+      "route": "Analytics",
+      "taskId": "TD4",
+      "taskStepId": "TD4-4",
+      "targetTag": "button",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911582697.805,
+      "type": "mousedown",
+      "x": 0.8036458333333333,
+      "y": 0.4777777777777778,
+      "componentId": "btn-export",
+      "componentRole": "primary-action",
+      "action": "click",
+      "route": "Analytics",
+      "taskId": "TD4",
+      "taskStepId": "TD4-4",
+      "targetTag": "button",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911582739.28,
+      "type": "mouseup",
+      "x": 0.8036458333333333,
+      "y": 0.4777777777777778,
+      "componentId": "btn-export",
+      "componentRole": "primary-action",
+      "action": "click",
+      "route": "Analytics",
+      "taskId": "TD4",
+      "taskStepId": "TD4-4",
+      "targetTag": "button",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911582739.58,
+      "type": "click",
+      "x": 0.8036458333333333,
+      "y": 0.4777777777777778,
+      "componentId": "btn-export",
+      "componentRole": "primary-action",
+      "action": "click",
+      "route": "Analytics",
+      "taskId": "TD4",
+      "taskStepId": "TD4-4",
+      "targetTag": "button",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    },
+    {
+      "timestamp": 1794911582742.19,
+      "type": "click",
+      "x": 0,
+      "y": 0,
+      "action": "click",
+      "route": "Analytics",
+      "taskId": "TD4",
+      "targetTag": "a",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "document": {
+        "width": 1920,
+        "height": 1080,
+        "scrollableWidth": 0,
+        "scrollableHeight": 0
+      }
+    }
+  ],
+  "microTensors": [
+    {
+      "windowId": 0,
+      "windowStart": 1794911579162.23,
+      "windowEnd": 1794911579412.23,
+      "values": [
+        0.24178452789783478,
+        0.4428306519985199,
+        0.0344076007604599,
+        0,
+        0.18070363998413086,
+        0.3199999928474426,
+        0.33035868406295776,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "eventCount": 10,
+      "inactive": false
+    },
+    {
+      "windowId": 1,
+      "windowStart": 1794911579412.23,
+      "windowEnd": 1794911579662.23,
+      "values": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "eventCount": 0,
+      "inactive": true
+    },
+    {
+      "windowId": 2,
+      "windowStart": 1794911579662.23,
+      "windowEnd": 1794911579912.23,
+      "values": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "eventCount": 0,
+      "inactive": true
+    },
+    {
+      "windowId": 3,
+      "windowStart": 1794911579912.23,
+      "windowEnd": 1794911580162.23,
+      "values": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "eventCount": 0,
+      "inactive": true
+    },
+    {
+      "windowId": 4,
+      "windowStart": 1794911580162.23,
+      "windowEnd": 1794911580412.23,
+      "values": [
+        0.6939548254013062,
+        0.698620617389679,
+        0.0037966426461935043,
+        0,
+        0.1683880090713501,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "eventCount": 4,
+      "inactive": false
+    },
+    {
+      "windowId": 5,
+      "windowStart": 1794911580412.23,
+      "windowEnd": 1794911580662.23,
+      "values": [
+        0.13957805931568146,
+        0.6978903412818909,
+        0.10431782901287079,
+        0.03999999910593033,
+        0.05618051439523697,
+        0.3199999928474426,
+        0.2406426966190338,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "eventCount": 6,
+      "inactive": false
+    },
+    {
+      "windowId": 6,
+      "windowStart": 1794911580662.23,
+      "windowEnd": 1794911580912.23,
+      "values": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "eventCount": 0,
+      "inactive": true
+    },
+    {
+      "windowId": 7,
+      "windowStart": 1794911580912.23,
+      "windowEnd": 1794911581162.23,
+      "values": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "eventCount": 0,
+      "inactive": true
+    },
+    {
+      "windowId": 8,
+      "windowStart": 1794911581162.23,
+      "windowEnd": 1794911581412.23,
+      "values": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "eventCount": 0,
+      "inactive": true
+    },
+    {
+      "windowId": 9,
+      "windowStart": 1794911581412.23,
+      "windowEnd": 1794911581662.23,
+      "values": [
+        0.2380668967962265,
+        0.44030773639678955,
+        0.034560754895210266,
+        0,
+        0.17616380751132965,
+        0.3199999928474426,
+        0.33035868406295776,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "eventCount": 10,
+      "inactive": false
+    },
+    {
+      "windowId": 10,
+      "windowStart": 1794911581662.23,
+      "windowEnd": 1794911581912.23,
+      "values": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "eventCount": 0,
+      "inactive": true
+    },
+    {
+      "windowId": 11,
+      "windowStart": 1794911581912.23,
+      "windowEnd": 1794911582162.23,
+      "values": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "eventCount": 0,
+      "inactive": true
+    },
+    {
+      "windowId": 12,
+      "windowStart": 1794911582162.23,
+      "windowEnd": 1794911582412.23,
+      "values": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "eventCount": 0,
+      "inactive": true
+    },
+    {
+      "windowId": 13,
+      "windowStart": 1794911582412.23,
+      "windowEnd": 1794911582662.23,
+      "values": [
+        0.5910698175430298,
+        0.5965073108673096,
+        0.004878595937043428,
+        0,
+        0.1461232453584671,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "eventCount": 4,
+      "inactive": false
+    },
+    {
+      "windowId": 14,
+      "windowStart": 1794911582662.23,
+      "windowEnd": 1794911582912.23,
+      "values": [
+        1,
+        1,
+        1,
+        0.03999999910593033,
+        0.8620375394821167,
+        0.3199999928474426,
+        0.4172097146511078,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "eventCount": 7,
+      "inactive": false
+    },
+    {
+      "windowId": 15,
+      "windowStart": 1794911582912.23,
+      "windowEnd": 1794911583162.23,
+      "values": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "eventCount": 0,
+      "inactive": true
+    }
+  ],
+  "macroInteractions": [
+    {
+      "timestamp": 1794911579326.155,
+      "symbol": "OPEN_REPORT",
+      "componentId": "open-report-eu-electronics",
+      "action": "click",
+      "route": "Reports",
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive"
+    },
+    {
+      "timestamp": 1794911579326.415,
+      "symbol": "OPEN_REPORT",
+      "componentId": "open-report-eu-electronics",
+      "action": "click",
+      "route": "Reports",
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive"
+    },
+    {
+      "timestamp": 1794911579367.905,
+      "symbol": "OPEN_REPORT",
+      "componentId": "open-report-eu-electronics",
+      "action": "click",
+      "route": "Reports",
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive"
+    },
+    {
+      "timestamp": 1794911579368.015,
+      "symbol": "OPEN_REPORT",
+      "componentId": "open-report-eu-electronics",
+      "action": "click",
+      "route": "Reports",
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive"
+    },
+    {
+      "timestamp": 1794911580489.175,
+      "symbol": "NAV_REPORTS",
+      "componentId": "nav-Reports",
+      "action": "click",
+      "route": "Analytics",
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "windowId": 3
+    },
+    {
+      "timestamp": 1794911581570.945,
+      "symbol": "OPEN_REPORT",
+      "componentId": "open-report-eu-books",
+      "action": "click",
+      "route": "Reports",
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "windowId": 7
+    },
+    {
+      "timestamp": 1794911581571.32,
+      "symbol": "OPEN_REPORT",
+      "componentId": "open-report-eu-books",
+      "action": "click",
+      "route": "Reports",
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "windowId": 7
+    },
+    {
+      "timestamp": 1794911581612.935,
+      "symbol": "OPEN_REPORT",
+      "componentId": "open-report-eu-books",
+      "action": "click",
+      "route": "Reports",
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "windowId": 7
+    },
+    {
+      "timestamp": 1794911581613.325,
+      "symbol": "OPEN_REPORT",
+      "componentId": "open-report-eu-books",
+      "action": "click",
+      "route": "Reports",
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "windowId": 7
+    },
+    {
+      "timestamp": 1794911582697.43,
+      "symbol": "EXPORT_REPORT",
+      "componentId": "btn-export",
+      "action": "click",
+      "route": "Analytics",
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "windowId": 12
+    },
+    {
+      "timestamp": 1794911582697.805,
+      "symbol": "EXPORT_REPORT",
+      "componentId": "btn-export",
+      "action": "click",
+      "route": "Analytics",
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "windowId": 12
+    },
+    {
+      "timestamp": 1794911582739.28,
+      "symbol": "EXPORT_REPORT",
+      "componentId": "btn-export",
+      "action": "click",
+      "route": "Analytics",
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "windowId": 12
+    },
+    {
+      "timestamp": 1794911582739.58,
+      "symbol": "EXPORT_REPORT",
+      "componentId": "btn-export",
+      "action": "click",
+      "route": "Analytics",
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "windowId": 12
+    }
+  ],
+  "outcomes": [
+    {
+      "timestamp": 1794911580489.175,
+      "outcome": "CLICK",
+      "lookaheadComplete": true,
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "windowId": 0,
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "sourceEventTimestamp": 1794911580489.175,
+      "sourceEventType": "click",
+      "componentId": "nav-Reports",
+      "taskId": "TD4",
+      "taskStepId": "TD4-2",
+      "route": "Analytics",
+      "derivation": {
+        "lookaheadStartMs": 1794911579912.23,
+        "lookaheadEndMs": 1794911580912.23,
+        "candidateCount": 2,
+        "earliestTimestampMs": 1794911580447.95,
+        "tieBroken": false,
+        "source": "dom_action",
+        "observableTermination": false
+      },
+      "taskOutcome": "navigate_reports",
+      "taskOutcomeVocabularyVersion": "testbed-semantic/1.0.0",
+      "taskOutcomeSource": "application_rule",
+      "taskOutcomeRuleId": "navigate_reports"
+    },
+    {
+      "timestamp": 1794911580489.175,
+      "outcome": "CLICK",
+      "lookaheadComplete": true,
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "windowId": 1,
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "sourceEventTimestamp": 1794911580489.175,
+      "sourceEventType": "click",
+      "componentId": "nav-Reports",
+      "taskId": "TD4",
+      "taskStepId": "TD4-2",
+      "route": "Analytics",
+      "derivation": {
+        "lookaheadStartMs": 1794911580162.23,
+        "lookaheadEndMs": 1794911581162.23,
+        "candidateCount": 2,
+        "earliestTimestampMs": 1794911580447.95,
+        "tieBroken": false,
+        "source": "dom_action",
+        "observableTermination": false
+      },
+      "taskOutcome": "navigate_reports",
+      "taskOutcomeVocabularyVersion": "testbed-semantic/1.0.0",
+      "taskOutcomeSource": "application_rule",
+      "taskOutcomeRuleId": "navigate_reports"
+    },
+    {
+      "timestamp": 1794911580489.175,
+      "outcome": "CLICK",
+      "lookaheadComplete": true,
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "windowId": 2,
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "sourceEventTimestamp": 1794911580489.175,
+      "sourceEventType": "click",
+      "componentId": "nav-Reports",
+      "taskId": "TD4",
+      "taskStepId": "TD4-2",
+      "route": "Analytics",
+      "derivation": {
+        "lookaheadStartMs": 1794911580412.23,
+        "lookaheadEndMs": 1794911581412.23,
+        "candidateCount": 2,
+        "earliestTimestampMs": 1794911580447.95,
+        "tieBroken": false,
+        "source": "dom_action",
+        "observableTermination": false
+      },
+      "taskOutcome": "navigate_reports",
+      "taskOutcomeVocabularyVersion": "testbed-semantic/1.0.0",
+      "taskOutcomeSource": "application_rule",
+      "taskOutcomeRuleId": "navigate_reports"
+    },
+    {
+      "timestamp": 1794911581613.325,
+      "outcome": "CLICK",
+      "lookaheadComplete": true,
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "windowId": 3,
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "sourceEventTimestamp": 1794911581613.325,
+      "sourceEventType": "click",
+      "componentId": "open-report-eu-books",
+      "taskId": "TD4",
+      "taskStepId": "TD4-3",
+      "route": "Reports",
+      "derivation": {
+        "lookaheadStartMs": 1794911580662.23,
+        "lookaheadEndMs": 1794911581662.23,
+        "candidateCount": 2,
+        "earliestTimestampMs": 1794911581571.32,
+        "tieBroken": false,
+        "source": "dom_action",
+        "observableTermination": false
+      },
+      "taskOutcome": "select_report",
+      "taskOutcomeVocabularyVersion": "testbed-semantic/1.0.0",
+      "taskOutcomeSource": "application_rule",
+      "taskOutcomeRuleId": "select_report"
+    },
+    {
+      "timestamp": 1794911581613.325,
+      "outcome": "CLICK",
+      "lookaheadComplete": true,
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "windowId": 4,
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "sourceEventTimestamp": 1794911581613.325,
+      "sourceEventType": "click",
+      "componentId": "open-report-eu-books",
+      "taskId": "TD4",
+      "taskStepId": "TD4-3",
+      "route": "Reports",
+      "derivation": {
+        "lookaheadStartMs": 1794911580912.23,
+        "lookaheadEndMs": 1794911581912.23,
+        "candidateCount": 2,
+        "earliestTimestampMs": 1794911581571.32,
+        "tieBroken": false,
+        "source": "dom_action",
+        "observableTermination": false
+      },
+      "taskOutcome": "select_report",
+      "taskOutcomeVocabularyVersion": "testbed-semantic/1.0.0",
+      "taskOutcomeSource": "application_rule",
+      "taskOutcomeRuleId": "select_report"
+    },
+    {
+      "timestamp": 1794911581613.325,
+      "outcome": "CLICK",
+      "lookaheadComplete": true,
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "windowId": 5,
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "sourceEventTimestamp": 1794911581613.325,
+      "sourceEventType": "click",
+      "componentId": "open-report-eu-books",
+      "taskId": "TD4",
+      "taskStepId": "TD4-3",
+      "route": "Reports",
+      "derivation": {
+        "lookaheadStartMs": 1794911581162.23,
+        "lookaheadEndMs": 1794911582162.23,
+        "candidateCount": 2,
+        "earliestTimestampMs": 1794911581571.32,
+        "tieBroken": false,
+        "source": "dom_action",
+        "observableTermination": false
+      },
+      "taskOutcome": "select_report",
+      "taskOutcomeVocabularyVersion": "testbed-semantic/1.0.0",
+      "taskOutcomeSource": "application_rule",
+      "taskOutcomeRuleId": "select_report"
+    },
+    {
+      "timestamp": 1794911581613.325,
+      "outcome": "CLICK",
+      "lookaheadComplete": true,
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "windowId": 6,
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "sourceEventTimestamp": 1794911581613.325,
+      "sourceEventType": "click",
+      "componentId": "open-report-eu-books",
+      "taskId": "TD4",
+      "taskStepId": "TD4-3",
+      "route": "Reports",
+      "derivation": {
+        "lookaheadStartMs": 1794911581412.23,
+        "lookaheadEndMs": 1794911582412.23,
+        "candidateCount": 2,
+        "earliestTimestampMs": 1794911581571.32,
+        "tieBroken": false,
+        "source": "dom_action",
+        "observableTermination": false
+      },
+      "taskOutcome": "select_report",
+      "taskOutcomeVocabularyVersion": "testbed-semantic/1.0.0",
+      "taskOutcomeSource": "application_rule",
+      "taskOutcomeRuleId": "select_report"
+    },
+    {
+      "timestamp": 1794911581162.23,
+      "outcome": "NO_OUTCOME",
+      "lookaheadComplete": true,
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "windowId": 7,
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "derivation": {
+        "lookaheadStartMs": 1794911581662.23,
+        "lookaheadEndMs": 1794911582662.23,
+        "candidateCount": 0,
+        "earliestTimestampMs": null,
+        "tieBroken": false,
+        "source": "none",
+        "observableTermination": false
+      }
+    },
+    {
+      "timestamp": 1794911582739.58,
+      "outcome": "CLICK",
+      "lookaheadComplete": false,
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "windowId": 8,
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "sourceEventTimestamp": 1794911582739.58,
+      "sourceEventType": "click",
+      "componentId": "btn-export",
+      "taskId": "TD4",
+      "taskStepId": "TD4-4",
+      "route": "Analytics",
+      "derivation": {
+        "lookaheadStartMs": 1794911581912.23,
+        "lookaheadEndMs": 1794911582912.23,
+        "candidateCount": 3,
+        "earliestTimestampMs": 1794911582697.805,
+        "tieBroken": false,
+        "source": "dom_action",
+        "observableTermination": false
+      },
+      "taskOutcome": "export_report",
+      "taskOutcomeVocabularyVersion": "testbed-semantic/1.0.0",
+      "taskOutcomeSource": "application_rule",
+      "taskOutcomeRuleId": "export_report"
+    },
+    {
+      "timestamp": 1794911582739.58,
+      "outcome": "CLICK",
+      "lookaheadComplete": false,
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "windowId": 9,
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "sourceEventTimestamp": 1794911582739.58,
+      "sourceEventType": "click",
+      "componentId": "btn-export",
+      "taskId": "TD4",
+      "taskStepId": "TD4-4",
+      "route": "Analytics",
+      "derivation": {
+        "lookaheadStartMs": 1794911582162.23,
+        "lookaheadEndMs": 1794911583162.23,
+        "candidateCount": 3,
+        "earliestTimestampMs": 1794911582697.805,
+        "tieBroken": false,
+        "source": "dom_action",
+        "observableTermination": false
+      },
+      "taskOutcome": "export_report",
+      "taskOutcomeVocabularyVersion": "testbed-semantic/1.0.0",
+      "taskOutcomeSource": "application_rule",
+      "taskOutcomeRuleId": "export_report"
+    },
+    {
+      "timestamp": 1794911582739.58,
+      "outcome": "CLICK",
+      "lookaheadComplete": false,
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "windowId": 10,
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "sourceEventTimestamp": 1794911582739.58,
+      "sourceEventType": "click",
+      "componentId": "btn-export",
+      "taskId": "TD4",
+      "taskStepId": "TD4-4",
+      "route": "Analytics",
+      "derivation": {
+        "lookaheadStartMs": 1794911582412.23,
+        "lookaheadEndMs": 1794911583412.23,
+        "candidateCount": 3,
+        "earliestTimestampMs": 1794911582697.805,
+        "tieBroken": false,
+        "source": "dom_action",
+        "observableTermination": false
+      },
+      "taskOutcome": "export_report",
+      "taskOutcomeVocabularyVersion": "testbed-semantic/1.0.0",
+      "taskOutcomeSource": "application_rule",
+      "taskOutcomeRuleId": "export_report"
+    },
+    {
+      "timestamp": 1794911582739.58,
+      "outcome": "CLICK",
+      "lookaheadComplete": false,
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "windowId": 11,
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "sourceEventTimestamp": 1794911582739.58,
+      "sourceEventType": "click",
+      "componentId": "btn-export",
+      "taskId": "TD4",
+      "taskStepId": "TD4-4",
+      "route": "Analytics",
+      "derivation": {
+        "lookaheadStartMs": 1794911582662.23,
+        "lookaheadEndMs": 1794911583662.23,
+        "candidateCount": 3,
+        "earliestTimestampMs": 1794911582697.805,
+        "tieBroken": false,
+        "source": "dom_action",
+        "observableTermination": false
+      },
+      "taskOutcome": "export_report",
+      "taskOutcomeVocabularyVersion": "testbed-semantic/1.0.0",
+      "taskOutcomeSource": "application_rule",
+      "taskOutcomeRuleId": "export_report"
+    },
+    {
+      "timestamp": 1794911582412.23,
+      "outcome": "ABANDON",
+      "lookaheadComplete": false,
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "windowId": 12,
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "derivation": {
+        "lookaheadStartMs": 1794911582912.23,
+        "lookaheadEndMs": 1794911583912.23,
+        "candidateCount": 0,
+        "earliestTimestampMs": null,
+        "tieBroken": false,
+        "source": "stream_exhaustion",
+        "observableTermination": false
+      }
+    },
+    {
+      "timestamp": 1794911582662.23,
+      "outcome": "ABANDON",
+      "lookaheadComplete": false,
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "windowId": 13,
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "derivation": {
+        "lookaheadStartMs": 1794911583162.23,
+        "lookaheadEndMs": 1794911584162.23,
+        "candidateCount": 0,
+        "earliestTimestampMs": null,
+        "tieBroken": false,
+        "source": "stream_exhaustion",
+        "observableTermination": false
+      }
+    },
+    {
+      "timestamp": 1794911582912.23,
+      "outcome": "ABANDON",
+      "lookaheadComplete": false,
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "windowId": 14,
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "derivation": {
+        "lookaheadStartMs": 1794911583412.23,
+        "lookaheadEndMs": 1794911584412.23,
+        "candidateCount": 0,
+        "earliestTimestampMs": null,
+        "tieBroken": false,
+        "source": "stream_exhaustion",
+        "observableTermination": false
+      }
+    },
+    {
+      "timestamp": 1794911583162.23,
+      "outcome": "ABANDON",
+      "lookaheadComplete": false,
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "windowId": 15,
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "derivation": {
+        "lookaheadStartMs": 1794911583662.23,
+        "lookaheadEndMs": 1794911584662.23,
+        "candidateCount": 0,
+        "earliestTimestampMs": null,
+        "tieBroken": false,
+        "source": "stream_exhaustion",
+        "observableTermination": false
+      }
+    }
+  ],
+  "predictions": [
+    {
+      "timestamp": 1794911581787,
+      "predictionId": "pred_1",
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "windowId": 8,
+      "evaluatedWindowIds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "matchedGate": "none",
+      "outcome": "NO_OUTCOME",
+      "predictedOutcome": "offer_assistance",
+      "predictionContractVersion": "1.0.0",
+      "predictedOutcomeVocabularyVersion": "1.0",
+      "targetContext": {
+        "route": "Analytics",
+        "taskId": "TD4",
+        "taskStepId": "TD4-4"
+      },
+      "confidence": 0.4259500205516815,
+      "latencyMs": 39.15999999642372,
+      "fastGateLatencyMs": 15.530000001192093,
+      "slowGateLatencyMs": 23.50499999523163,
+      "modelVersion": "TargetInterventionHead-v1.0.0-int8",
+      "contextEncodingVersion": "R6-v1.0.0",
+      "bothGatesEvaluated": true
+    },
+    {
+      "timestamp": 1794911582036,
+      "predictionId": "pred_2",
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "windowId": 9,
+      "evaluatedWindowIds": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "matchedGate": "none",
+      "outcome": "NO_OUTCOME",
+      "predictedOutcome": "no_op",
+      "predictionContractVersion": "1.0.0",
+      "predictedOutcomeVocabularyVersion": "1.0",
+      "targetContext": {
+        "route": "Analytics",
+        "taskId": "TD4",
+        "taskStepId": "TD4-4"
+      },
+      "confidence": 0.39162325859069824,
+      "latencyMs": 1.9850000143051147,
+      "fastGateLatencyMs": 0.8549999892711639,
+      "slowGateLatencyMs": 1.1150000095367432,
+      "modelVersion": "TargetInterventionHead-v1.0.0-int8",
+      "contextEncodingVersion": "R6-v1.0.0",
+      "bothGatesEvaluated": true
+    },
+    {
+      "timestamp": 1794911583036,
+      "predictionId": "pred_3",
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "windowId": 13,
+      "evaluatedWindowIds": [
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13
+      ],
+      "matchedGate": "none",
+      "outcome": "NO_OUTCOME",
+      "predictedOutcome": "no_op",
+      "predictionContractVersion": "1.0.0",
+      "predictedOutcomeVocabularyVersion": "1.0",
+      "targetContext": {
+        "route": "Analytics",
+        "taskId": "TD4",
+        "componentId": "btn-export"
+      },
+      "confidence": 0.41294899582862854,
+      "latencyMs": 4.535000026226044,
+      "fastGateLatencyMs": 3.4149999916553497,
+      "slowGateLatencyMs": 1.0899999737739563,
+      "modelVersion": "TargetInterventionHead-v1.0.0-int8",
+      "contextEncodingVersion": "R6-v1.0.0",
+      "bothGatesEvaluated": true
+    },
+    {
+      "timestamp": 1794911583163,
+      "predictionId": "pred_4",
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "windowId": 14,
+      "evaluatedWindowIds": [
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14
+      ],
+      "matchedGate": "none",
+      "outcome": "CLICK",
+      "predictedOutcome": "no_op",
+      "predictionContractVersion": "1.0.0",
+      "predictedOutcomeVocabularyVersion": "1.0",
+      "targetContext": {
+        "route": "Analytics",
+        "taskId": "TD4",
+        "componentId": "btn-export"
+      },
+      "confidence": 0.3625553250312805,
+      "latencyMs": 4.449999988079071,
+      "fastGateLatencyMs": 3.2999999821186066,
+      "slowGateLatencyMs": 1.1200000047683716,
+      "modelVersion": "TargetInterventionHead-v1.0.0-int8",
+      "contextEncodingVersion": "R6-v1.0.0",
+      "bothGatesEvaluated": true
+    }
+  ],
+  "policyDecisions": [
+    {
+      "timestamp": 1794911581827.61,
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "windowId": 8,
+      "predictionId": "pred_1",
+      "candidate": "no_op",
+      "confidence": 0.2446090430021286,
+      "accepted": false,
+      "policyDecision": "rejected",
+      "policyReason": "Confidence 0.24 below threshold 0.75",
+      "rejectionCategory": "below_threshold",
+      "candidateCount": 0,
+      "cooldownRemainingMs": 0,
+      "phase": "policy"
+    },
+    {
+      "timestamp": 1794911582039.055,
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "windowId": 9,
+      "predictionId": "pred_2",
+      "accepted": false,
+      "policyDecision": "no_prediction",
+      "policyReason": "No intervention: both gates evaluated and returned no candidate",
+      "candidateCount": 0,
+      "cooldownRemainingMs": 0,
+      "phase": "no_prediction"
+    },
+    {
+      "timestamp": 1794911583041.92,
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "windowId": 13,
+      "predictionId": "pred_3",
+      "accepted": false,
+      "policyDecision": "no_prediction",
+      "policyReason": "No intervention: both gates evaluated and returned no candidate",
+      "candidateCount": 0,
+      "cooldownRemainingMs": 0,
+      "phase": "no_prediction"
+    },
+    {
+      "timestamp": 1794911583168.335,
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive",
+      "windowId": 14,
+      "predictionId": "pred_4",
+      "accepted": false,
+      "policyDecision": "no_prediction",
+      "policyReason": "No intervention: both gates evaluated and returned no candidate",
+      "candidateCount": 0,
+      "cooldownRemainingMs": 0,
+      "phase": "no_prediction"
+    }
+  ],
+  "interventions": [],
+  "taskEvents": [
+    {
+      "timestamp": 1794911579145.485,
+      "type": "task_start",
+      "taskId": "TD4",
+      "status": "In Progress",
+      "errors": 0,
+      "taskDefinitionVersion": "TD-v2",
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive"
+    },
+    {
+      "timestamp": 1794911579368.08,
+      "type": "task_step",
+      "taskId": "TD4",
+      "taskStepId": "TD4-1",
+      "status": "In Progress",
+      "errors": 0,
+      "taskDefinitionVersion": "TD-v2",
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive"
+    },
+    {
+      "timestamp": 1794911580489.295,
+      "type": "task_step",
+      "taskId": "TD4",
+      "taskStepId": "TD4-2",
+      "status": "In Progress",
+      "errors": 0,
+      "taskDefinitionVersion": "TD-v2",
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive"
+    },
+    {
+      "timestamp": 1794911581613.52,
+      "type": "task_step",
+      "taskId": "TD4",
+      "taskStepId": "TD4-3",
+      "status": "In Progress",
+      "errors": 0,
+      "taskDefinitionVersion": "TD-v2",
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive"
+    },
+    {
+      "timestamp": 1794911582739.72,
+      "type": "task_step",
+      "taskId": "TD4",
+      "taskStepId": "TD4-4",
+      "status": "In Progress",
+      "errors": 0,
+      "taskDefinitionVersion": "TD-v2",
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive"
+    },
+    {
+      "timestamp": 1794911582739.795,
+      "type": "task_complete",
+      "taskId": "TD4",
+      "taskStepId": "TD4-4",
+      "status": "Completed",
+      "errors": 0,
+      "durationMs": 3594.294921875,
+      "taskDefinitionVersion": "TD-v2",
+      "sessionId": "54f2e39b-9674-46e6-85ab-f20a5495d100",
+      "experimentId": "exp_mwkk0dos",
+      "conditionId": "adaptive"
+    }
+  ]
+}
