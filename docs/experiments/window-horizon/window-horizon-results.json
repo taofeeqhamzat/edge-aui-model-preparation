@@ -1,0 +1,688 @@
+{
+  "evidence_scope": "Scripted engineering captures only. These are pipeline and label-feasibility results, not participant evidence, and no semantic head was trained.",
+  "experiments": [
+    {
+      "config": {
+        "history_windows": 8,
+        "id": "A",
+        "label": "baseline 8x500 ms, [500, 1500] ms",
+        "lookahead_ms": [
+          500,
+          1500
+        ],
+        "stride_ms": 250
+      },
+      "metrics": {
+        "excluded_incomplete_lookahead": 48,
+        "excluded_recorded_only": 0,
+        "false_early_predictions": 0,
+        "lead_time_median_ms": 1052.7574462890625,
+        "lead_time_ms": {
+          "median": 1052.7574462890625,
+          "p25": 751.1063232421875,
+          "p75": 1276.9249267578125
+        },
+        "macro_f1": 0.05555555555555556,
+        "per_class_prf": {
+          "macro_f1": 0.05555555555555556,
+          "majority_class": "apply_filter",
+          "per_class": {
+            "NO_OUTCOME": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 1
+            },
+            "apply_filter": {
+              "f1": 0.33333333333333337,
+              "precision": 0.2,
+              "recall": 1.0,
+              "support": 3
+            },
+            "backtrack": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "close_filter_section": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "export_report": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "navigate_analytics": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "navigate_overview": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "navigate_reports": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "open_filter_section": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 4
+            },
+            "reset_filter": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 2
+            },
+            "select_category": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 2
+            },
+            "select_date_range": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 3
+            },
+            "select_region": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "select_report": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            }
+          }
+        },
+        "per_outcome_frequency": {
+          "NO_OUTCOME": 3,
+          "apply_filter": 9,
+          "backtrack": 0,
+          "close_filter_section": 0,
+          "export_report": 6,
+          "navigate_analytics": 0,
+          "navigate_overview": 0,
+          "navigate_reports": 0,
+          "open_filter_section": 4,
+          "reset_filter": 2,
+          "select_category": 4,
+          "select_date_range": 3,
+          "select_region": 0,
+          "select_report": 0
+        },
+        "task_coverage": {
+          "test": {
+            "TD3": 15
+          },
+          "train": {
+            "TD1": 8,
+            "TD2": 5,
+            "TD3": 15,
+            "TD4": 3
+          },
+          "val": {
+            "TD2": 4
+          }
+        },
+        "tasks_absent": {
+          "test": [
+            "TD1",
+            "TD2",
+            "TD4"
+          ],
+          "train": [],
+          "val": [
+            "TD1",
+            "TD3",
+            "TD4"
+          ]
+        },
+        "time_between_actions_ms": {
+          "median": 1044.2174072265625,
+          "p25": 1042.3787231445312,
+          "p75": 1122.9324951171875
+        },
+        "total_examples": 50,
+        "train_classes_with_min_support": 2,
+        "train_max_class_share": 0.2903225806451613
+      },
+      "order": 0
+    },
+    {
+      "config": {
+        "history_windows": 8,
+        "id": "B",
+        "label": "8x500 ms, [1000, 2000] ms",
+        "lookahead_ms": [
+          1000,
+          2000
+        ],
+        "stride_ms": 250
+      },
+      "metrics": {
+        "excluded_incomplete_lookahead": 62,
+        "excluded_recorded_only": 0,
+        "false_early_predictions": 0,
+        "lead_time_median_ms": 1547.184814453125,
+        "lead_time_ms": {
+          "median": 1547.184814453125,
+          "p25": 1285.52490234375,
+          "p75": 1723.425048828125
+        },
+        "macro_f1": 0.075,
+        "per_class_prf": {
+          "macro_f1": 0.075,
+          "majority_class": "apply_filter",
+          "per_class": {
+            "NO_OUTCOME": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 1
+            },
+            "apply_filter": {
+              "f1": 0.375,
+              "precision": 0.23076923076923078,
+              "recall": 1.0,
+              "support": 3
+            },
+            "backtrack": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "close_filter_section": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "export_report": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "navigate_analytics": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "navigate_overview": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "navigate_reports": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "open_filter_section": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 4
+            },
+            "reset_filter": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 1
+            },
+            "select_category": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "select_date_range": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 4
+            },
+            "select_region": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "select_report": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            }
+          }
+        },
+        "per_outcome_frequency": {
+          "NO_OUTCOME": 2,
+          "apply_filter": 6,
+          "backtrack": 0,
+          "close_filter_section": 0,
+          "export_report": 4,
+          "navigate_analytics": 0,
+          "navigate_overview": 0,
+          "navigate_reports": 0,
+          "open_filter_section": 4,
+          "reset_filter": 1,
+          "select_category": 0,
+          "select_date_range": 4,
+          "select_region": 0,
+          "select_report": 0
+        },
+        "task_coverage": {
+          "test": {
+            "TD3": 13
+          },
+          "train": {
+            "TD1": 4,
+            "TD2": 3,
+            "TD3": 13,
+            "TD4": 1
+          },
+          "val": {
+            "TD2": 2
+          }
+        },
+        "tasks_absent": {
+          "test": [
+            "TD1",
+            "TD2",
+            "TD4"
+          ],
+          "train": [],
+          "val": [
+            "TD1",
+            "TD3",
+            "TD4"
+          ]
+        },
+        "time_between_actions_ms": {
+          "median": 1044.425048828125,
+          "p25": 1032.8250732421875,
+          "p75": 1123.614990234375
+        },
+        "total_examples": 36,
+        "train_classes_with_min_support": 1,
+        "train_max_class_share": 0.2857142857142857
+      },
+      "order": 1
+    },
+    {
+      "config": {
+        "history_windows": 4,
+        "id": "C",
+        "label": "4x500 ms, [500, 1500] ms",
+        "lookahead_ms": [
+          500,
+          1500
+        ],
+        "stride_ms": 250
+      },
+      "metrics": {
+        "excluded_incomplete_lookahead": 48,
+        "excluded_recorded_only": 0,
+        "false_early_predictions": 0,
+        "lead_time_median_ms": 1120.267578125,
+        "lead_time_ms": {
+          "median": 1120.267578125,
+          "p25": 770.2886962890625,
+          "p75": 1281.2911376953125
+        },
+        "macro_f1": 0.0,
+        "per_class_prf": {
+          "macro_f1": 0.0,
+          "majority_class": "select_category",
+          "per_class": {
+            "NO_OUTCOME": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 1
+            },
+            "apply_filter": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 3
+            },
+            "backtrack": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "close_filter_section": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "export_report": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 2
+            },
+            "navigate_analytics": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "navigate_overview": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "navigate_reports": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "open_filter_section": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "reset_filter": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "select_category": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "select_date_range": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "select_region": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 2
+            },
+            "select_report": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            }
+          }
+        },
+        "per_outcome_frequency": {
+          "NO_OUTCOME": 4,
+          "apply_filter": 10,
+          "backtrack": 0,
+          "close_filter_section": 0,
+          "export_report": 4,
+          "navigate_analytics": 0,
+          "navigate_overview": 0,
+          "navigate_reports": 0,
+          "open_filter_section": 10,
+          "reset_filter": 2,
+          "select_category": 12,
+          "select_date_range": 3,
+          "select_region": 3,
+          "select_report": 7
+        },
+        "task_coverage": {
+          "test": {
+            "TD1": 8
+          },
+          "train": {
+            "TD1": 8,
+            "TD2": 17,
+            "TD3": 19,
+            "TD4": 11
+          },
+          "val": {
+            "TD3": 19
+          }
+        },
+        "tasks_absent": {
+          "test": [
+            "TD2",
+            "TD3",
+            "TD4"
+          ],
+          "train": [],
+          "val": [
+            "TD1",
+            "TD2",
+            "TD4"
+          ]
+        },
+        "time_between_actions_ms": {
+          "median": 1044.009765625,
+          "p25": 1020.755126953125,
+          "p75": 1100.02001953125
+        },
+        "total_examples": 82,
+        "train_classes_with_min_support": 4,
+        "train_max_class_share": 0.21818181818181817
+      },
+      "order": 2
+    },
+    {
+      "config": {
+        "history_windows": 12,
+        "id": "D",
+        "label": "12x500 ms, [500, 1500] ms",
+        "lookahead_ms": [
+          500,
+          1500
+        ],
+        "stride_ms": 250
+      },
+      "metrics": {
+        "excluded_incomplete_lookahead": 43,
+        "excluded_recorded_only": 0,
+        "false_early_predictions": 0,
+        "lead_time_median_ms": 1047.184814453125,
+        "lead_time_ms": {
+          "median": 1047.184814453125,
+          "p25": 690.5274658203125,
+          "p75": 1260.304931640625
+        },
+        "macro_f1": 0.10714285714285714,
+        "per_class_prf": {
+          "macro_f1": 0.10714285714285714,
+          "majority_class": "apply_filter",
+          "per_class": {
+            "NO_OUTCOME": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "apply_filter": {
+              "f1": 0.42857142857142855,
+              "precision": 0.2727272727272727,
+              "recall": 1.0,
+              "support": 3
+            },
+            "backtrack": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "close_filter_section": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "export_report": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "navigate_analytics": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "navigate_overview": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "navigate_reports": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "open_filter_section": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 3
+            },
+            "reset_filter": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 2
+            },
+            "select_category": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "select_date_range": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 3
+            },
+            "select_region": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "select_report": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            }
+          }
+        },
+        "per_outcome_frequency": {
+          "NO_OUTCOME": 0,
+          "apply_filter": 4,
+          "backtrack": 0,
+          "close_filter_section": 0,
+          "export_report": 0,
+          "navigate_analytics": 0,
+          "navigate_overview": 0,
+          "navigate_reports": 0,
+          "open_filter_section": 3,
+          "reset_filter": 2,
+          "select_category": 0,
+          "select_date_range": 3,
+          "select_region": 0,
+          "select_report": 0
+        },
+        "task_coverage": {
+          "test": {
+            "TD3": 11
+          },
+          "train": {
+            "TD2": 1,
+            "TD3": 11
+          },
+          "val": {}
+        },
+        "tasks_absent": {
+          "test": [
+            "TD2"
+          ],
+          "train": [],
+          "val": [
+            "TD2",
+            "TD3"
+          ]
+        },
+        "time_between_actions_ms": {
+          "median": 1043.635009765625,
+          "p25": 1027.8151245117188,
+          "p75": 1102.7937622070312
+        },
+        "total_examples": 23,
+        "train_classes_with_min_support": 0,
+        "train_max_class_share": 0.3333333333333333
+      },
+      "order": 3
+    }
+  ],
+  "selection": {
+    "config": {
+      "history_windows": 4,
+      "id": "C",
+      "label": "4x500 ms, [500, 1500] ms",
+      "lookahead_ms": [
+        500,
+        1500
+      ],
+      "stride_ms": 250
+    },
+    "criteria": [
+      "maximise training classes with >= 5 examples",
+      "minimise the largest single-class share in training",
+      "minimise median lead time (earlier warning)",
+      "declared A, B, C, D order"
+    ],
+    "order": 2,
+    "ranking": [
+      "C",
+      "A",
+      "B",
+      "D"
+    ],
+    "rationale": "Configuration C was selected by the pre-declared criteria: 4 target classes have at least 5 training examples (highest), the largest training class holds 21.8% of examples, and the median lead time is 1120.3 ms."
+  }
+}
