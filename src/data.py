@@ -68,6 +68,16 @@ if PYARROW_AVAILABLE:
         # Origin of the trace: "scripted" or "participant". Single column because the
         # snake_case and CamelCase spellings are identical for this field.
         ("provenance", pa.string()),       # Nullable (defaults to "scripted")
+        # Semantic outcome + task lifecycle carried from trace 1.4.0 (Task 40.1).
+        # Legacy versions leave these null rather than inventing a semantic label.
+        ("task_outcome", pa.string()),
+        ("task_outcome_vocabulary_version", pa.string()),
+        ("task_outcome_source", pa.string()),
+        ("task_outcome_rule_id", pa.string()),
+        ("task_definition_version", pa.string()),
+        ("semantic_outcome_vocabulary_version", pa.string()),
+        ("task_status", pa.string()),
+        ("task_failure_reason", pa.string()),
         # CamelCase aliases for exact acceptance criteria verification
         ("sessionId", pa.string()),        # Nullable
         ("experimentId", pa.string()),     # Nullable

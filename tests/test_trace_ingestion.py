@@ -201,6 +201,10 @@ class TestTraceIngestion(unittest.TestCase):
             "session_id", "experiment_id", "condition_id", "task_id", "window_id",
             "source_event_ids", "preprocessing_version", "feature_schema_version",
             "provenance",
+            # Semantic/task fields added for trace 1.4.0 ingestion (Task 40.1)
+            "task_outcome", "task_outcome_vocabulary_version", "task_outcome_source",
+            "task_outcome_rule_id", "task_definition_version",
+            "semantic_outcome_vocabulary_version", "task_status", "task_failure_reason",
             # CamelCase aliases
             "sessionId", "experimentId", "conditionId", "taskId", "windowId",
             "sourceEventIds", "preprocessingVersion", "featureSchemaVersion"
@@ -292,6 +296,77 @@ class TestTraceIngestion(unittest.TestCase):
             self.assertEqual(row["preprocessing_version"], PREPROCESSING_VERSION)
             self.assertEqual(row["feature_schema_version"], FEATURE_SCHEMA_VERSION)
 
+    def test_140_rows_carry_semantic_and_task_fields(self):
+        """Task 40.1: canonical rows carry the semantic outcome, its vocabulary and the task version."""
+        trace = create_minimal_trace_dict_v140()
+        rows = parse_experiment_trace(trace)
+        for row in rows:
+            self.assertEqual(row["task_outcome"], "apply_filter")
+            self.assertEqual(row["task_outcome_vocabulary_version"], "testbed-semantic/1.0.0")
+            self.assertEqual(row["task_outcome_source"], "application_rule")
+            self.assertEqual(row["task_outcome_rule_id"], "apply_filter")
+            self.assertEqual(row["task_definition_version"], "TD-v2")
+            self.assertEqual(row["semantic_outcome_vocabulary_version"], "testbed-semantic/1.0.0")
+
+    def test_140_row_without_rule_match_keeps_null_semantic_outcome(self):
+        """A window whose outcome carries no semantic ID is null, not a guessed label."""
+        trace = create_minimal_trace_dict_v140()
+        for key in ("taskOutcome", "taskOutcomeVocabularyVersion",
+                    "taskOutcomeSource", "taskOutcomeRuleId"):
+            trace["outcomes"][0].pop(key)
+        rows = parse_experiment_trace(trace)
+        self.assertTrue(all(row["task_outcome"] is None for row in rows))
+        self.assertTrue(all(row["task_outcome_source"] is None for row in rows))
+        # The study-level vocabulary version still describes the trace.
+        self.assertEqual(rows[0]["semantic_outcome_vocabulary_version"], "testbed-semantic/1.0.0")
+
+    def test_140_task_fail_reason_is_preserved(self):
+        """A timeout failure is preserved causally: rows at/after the event carry status + reason."""
+        trace = create_minimal_trace_dict_v140()
+        trace["taskEvents"].append({
+            "timestamp": 1200.0,
+            "type": "task_fail",
+            "taskId": trace["task"]["currentTaskId"],
+            "status": "Failed",
+            "errors": 1,
+            "reason": "timeout",
+            "taskDefinitionVersion": "TD-v2",
+            "sessionId": trace["session"]["sessionId"],
+            "experimentId": trace["session"]["experimentId"],
+            "conditionId": trace["session"]["conditionId"],
+        })
+        rows = parse_experiment_trace(trace)
+        self.assertEqual(rows[0]["task_status"], "In Progress")
+        self.assertIsNone(rows[0]["task_failure_reason"])
+        self.assertEqual(rows[-1]["task_status"], "Failed")
+        self.assertEqual(rows[-1]["task_failure_reason"], "timeout")
+
+    def test_130_rows_have_no_semantic_fields(self):
+        """Legacy 1.3.0 rows keep the semantic columns null; nothing is invented."""
+        rows = parse_experiment_trace(create_minimal_trace_dict_v130())
+        for row in rows:
+            self.assertIsNone(row["task_outcome"])
+            self.assertIsNone(row["task_definition_version"])
+            self.assertIsNone(row["task_status"])
+
+    def test_unmapped_outcome_record_field_rejected(self):
+        """Outcome records are strictly key-checked, like behaviour events."""
+        trace = create_minimal_trace_dict_v140()
+        trace["outcomes"][0]["unexpectedOutcomeField"] = 1
+        with self.assertRaises(ValueError) as ctx:
+            parse_experiment_trace(trace)
+        self.assertIn("Unmapped outcome record field", str(ctx.exception))
+        self.assertIn("unexpectedOutcomeField", str(ctx.exception))
+
+    def test_unmapped_task_event_field_rejected(self):
+        """Task events are strictly key-checked; an unknown lifecycle field fails loudly."""
+        trace = create_minimal_trace_dict_v140()
+        trace["taskEvents"][0]["unexpectedTaskField"] = "x"
+        with self.assertRaises(ValueError) as ctx:
+            parse_experiment_trace(trace)
+        self.assertIn("Unmapped task event field", str(ctx.exception))
+        self.assertIn("unexpectedTaskField", str(ctx.exception))
+
     def test_real_140_capture_ingests(self):
         """
         A real exported 1.4.0 capture must ingest, not only a hand-built dict.
@@ -329,6 +404,19 @@ class TestTraceIngestion(unittest.TestCase):
             self.assertTrue(
                 all(row["provenance"] == "scripted" for row in rows),
                 f"{capture.name} must be labelled scripted engineering evidence",
+            )
+            declared_task_version = (
+                json.loads(capture.read_text(encoding="utf-8")).get("metadata", {})
+                .get("taskDefinitionVersion")
+            )
+            if declared_task_version:
+                self.assertTrue(
+                    all(row["task_definition_version"] == declared_task_version for row in rows),
+                    f"{capture.name} must carry the declared task-definition version on every row",
+                )
+            self.assertTrue(
+                any(row["task_outcome"] for row in rows),
+                f"{capture.name} must carry at least one recorded semantic outcome",
             )
             total_rows += len(rows)
         self.assertGreater(total_rows, 0)
@@ -533,6 +621,21 @@ class TestTraceIngestion(unittest.TestCase):
         self.assertEqual(scroll_vel_mask, 0.0, "Unmodelled scroll velocity modality mask must be 0.0")
         self.assertEqual(tensor[7], 0.0, "Unmodelled scroll depth value masked to 0.0")
         self.assertEqual(tensor[8], 0.0, "Unmodelled scroll velocity value masked to 0.0")
+
+    def test_cached_and_forced_directory_ingestion(self):
+        """A non-empty output is reused unless --force; force re-ingests from the traces."""
+        trace = create_minimal_trace_dict_v140()
+        with tempfile.TemporaryDirectory() as tmp:
+            trace_path = Path(tmp) / "capture.json"
+            trace_path.write_text(json.dumps(trace), encoding="utf-8")
+            out_path = Path(tmp) / "canonical.parquet"
+
+            first = ingest_trace_directory(tmp, output_path=out_path)
+            self.assertTrue(Path(first).is_file())
+            second = ingest_trace_directory(tmp, output_path=out_path)
+            self.assertEqual(first, second)
+            forced = ingest_trace_directory(tmp, output_path=out_path, force=True)
+            self.assertEqual(first, forced)
 
     def test_byte_identical_export(self):
         """Assert that two consecutive conversions of the same trace directory produce byte-identical Parquet files."""
