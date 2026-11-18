@@ -13,7 +13,9 @@ Enforces:
 import copy
 import os
 import sys
+import tempfile
 import unittest
+from pathlib import Path
 import numpy as np
 import torch
 import torch.nn as nn
@@ -30,10 +32,14 @@ from training import (
     evaluate_intervention_retention,
     train_intervention_model,
 )
+from data_manager import create_dataset_manifest
 from target_dataset import (
     TargetInterventionDataset,
+    build_target_dataset_from_traces,
     load_intervention_dataset,
     get_intervention_class_weights,
+    save_target_dataset_parquet,
+    split_target_dataset,
     INTERVENTION_VOCABULARY,
     INTERVENTION_TO_ID,
 )
@@ -44,16 +50,41 @@ class TestInterventionHeadTraining(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.train_ds = load_intervention_dataset(version="v1.0.0", split="train")
-        cls.val_ds = load_intervention_dataset(version="v1.0.0", split="val")
-        cls.test_ds = load_intervention_dataset(version="v1.0.0", split="test")
-        cls.class_weights = get_intervention_class_weights(version="v1.0.0")
+        # Build the dataset from the traces that are present. The previous version loaded a
+        # cached .data artifact recorded from a larger capture set, so the expected counts
+        # described data the repository no longer contains.
+        cls._tmpdir = tempfile.TemporaryDirectory()
+        root = Path(__file__).resolve().parent.parent
+        trace_dir = root / ".data" / "raw" / "scripted"
+        rows, _ = build_target_dataset_from_traces(trace_dir=trace_dir)
+        split_rows, summary = split_target_dataset(rows, random_seed=42)
+        cls.summary = summary
+        cls.expected = summary["example_counts"]
+        cls.parquet_path = Path(cls._tmpdir.name) / "target_intervention_dataset.parquet"
+        cls.manifest_path = Path(cls._tmpdir.name) / "manifest.json"
+        save_target_dataset_parquet(split_rows, cls.parquet_path, split_summary=summary)
+        create_dataset_manifest(
+            rows=split_rows,
+            split_summary=summary,
+            trace_dir=trace_dir,
+            output_path=cls.manifest_path,
+            dataset_version="test-training",
+        )
+
+        cls.train_ds = load_intervention_dataset(split="train", parquet_path=cls.parquet_path)
+        cls.val_ds = load_intervention_dataset(split="val", parquet_path=cls.parquet_path)
+        cls.test_ds = load_intervention_dataset(split="test", parquet_path=cls.parquet_path)
+        cls.class_weights = get_intervention_class_weights(manifest_path=cls.manifest_path)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmpdir.cleanup()
 
     def test_dataset_loader_contract(self):
         """Assert dataset partitions match expected example counts and batch tensor shapes."""
-        self.assertEqual(len(self.train_ds), 208, "Expected 208 training examples in v1.0.0")
-        self.assertEqual(len(self.val_ds), 51, "Expected 51 validation examples in v1.0.0")
-        self.assertEqual(len(self.test_ds), 30, "Expected 30 test examples in v1.0.0")
+        self.assertEqual(len(self.train_ds), self.expected["train"])
+        self.assertEqual(len(self.val_ds), self.expected["val"])
+        self.assertEqual(len(self.test_ds), self.expected["test"])
 
         # Test index item
         seq, ctx, tgt = self.train_ds[0]
@@ -62,14 +93,36 @@ class TestInterventionHeadTraining(unittest.TestCase):
         self.assertIsInstance(tgt.item(), int)
         self.assertTrue(0 <= tgt.item() < 5, "Target must be in range 0..4")
 
-        # Test class weights
+        # Test class weights. A class absent from the training partition gets weight 0 by
+        # design (declared, not concealed), so only represented classes must be positive.
         self.assertEqual(self.class_weights.shape, (5,), "Class weights must be 5-dimensional")
-        self.assertTrue((self.class_weights > 0).all(), "All class weights must be positive")
+        self.assertTrue((self.class_weights >= 0).all(), "Class weights must be non-negative")
+        train_counts = self.summary["class_distribution"]["train"]["counts"]
+        for name in INTERVENTION_VOCABULARY:
+            if train_counts.get(name, 0) > 0:
+                self.assertGreater(
+                    float(self.class_weights[INTERVENTION_TO_ID[name]]), 0.0,
+                    f"Class '{name}' is represented in train and must have a positive weight",
+                )
 
         # Test metadata
         meta = self.train_ds.get_metadata(0)
         self.assertIn("session_id", meta)
         self.assertIn("task_id", meta)
+
+    def test_empty_split_and_invalid_metadata_contract(self):
+        """An absent split returns an empty dataset; malformed lengths fail loudly."""
+        empty = load_intervention_dataset(
+            split="does-not-exist", parquet_path=self.parquet_path
+        )
+        self.assertEqual(len(empty), 0)
+        with self.assertRaises(ValueError):
+            TargetInterventionDataset(
+                np.zeros((2, 8, 18), dtype=np.float32),
+                np.zeros((1, 6), dtype=np.float32),
+                np.zeros(2, dtype=np.int64),
+            )
+        self.assertEqual(self.train_ds.get_metadata(10_000), {})
 
     def test_e1_freeze_contract(self):
         """

@@ -77,6 +77,31 @@ target_generation:
     3: expand_tooltip
     4: no_op
 
+semantic_targets:
+  # Task 40.2: the model's target vocabulary is the approved 14 IDs. The runtime records one
+  # further ID (`inspect_help`) that is evidence, not a target (ADR-030).
+  target_vocabulary_version: "testbed-semantic-target/1.0.0"
+  recorded_vocabulary_id: "testbed-semantic"
+  recorded_vocabulary_version: "testbed-semantic/1.0.0"
+  target_vocabulary:
+    0: navigate_overview
+    1: navigate_analytics
+    2: navigate_reports
+    3: select_report
+    4: open_filter_section
+    5: close_filter_section
+    6: select_region
+    7: select_date_range
+    8: select_category
+    9: apply_filter
+    10: reset_filter
+    11: export_report
+    12: backtrack
+    13: NO_OUTCOME
+  recorded_only_outcomes:
+    - inspect_help
+  lookahead_horizon_ms: [500, 1500]
+
 training:
   batch_size: 64
   epochs: 5

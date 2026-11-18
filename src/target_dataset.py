@@ -61,6 +61,20 @@ try:
     from target_generation import compute_class_weights
     from config import load_config
     from data_manager import find_project_root
+    from semantic_targets import (
+        DEFAULT_LOOKAHEAD_MS,
+        NO_OUTCOME,
+        RECORDED_ONLY_OUTCOMES,
+        RECORDED_VOCABULARY_VERSION,
+        TARGET_VOCABULARY,
+        TARGET_VOCABULARY_VERSION,
+        find_source_event,
+        is_target_outcome,
+        record_timestamp,
+        resolve_target_label,
+        select_target_record,
+        target_outcome_id,
+    )
 except ImportError:
     from src.context_encoding import (
         CONTEXT_VECTOR_DIM,
@@ -81,6 +95,20 @@ except ImportError:
     )
     from src.target_generation import compute_class_weights
     from src.config import load_config
+    from src.semantic_targets import (
+        DEFAULT_LOOKAHEAD_MS,
+        NO_OUTCOME,
+        RECORDED_ONLY_OUTCOMES,
+        RECORDED_VOCABULARY_VERSION,
+        TARGET_VOCABULARY,
+        TARGET_VOCABULARY_VERSION,
+        find_source_event,
+        is_target_outcome,
+        record_timestamp,
+        resolve_target_label,
+        select_target_record,
+        target_outcome_id,
+    )
     try:
         from src.data_manager import find_project_root
     except ImportError:
@@ -108,7 +136,403 @@ if PYARROW_AVAILABLE:
         ("preprocessing_version", pa.string()),
         ("feature_schema_version", pa.string()),
         ("target_generation_version", pa.string()),
+        # Semantic target fields (Task 40.2). Null on intervention-only rows.
+        ("target_task_outcome", pa.string()),
+        ("target_task_outcome_id", pa.int64()),
+        ("target_vocabulary_version", pa.string()),
+        ("recorded_vocabulary_version", pa.string()),
+        ("task_definition_version", pa.string()),
+        ("target_label_source", pa.string()),
+        ("target_event_timestamp", pa.float64()),
+        ("lead_time_ms", pa.float64()),
     ])
+
+
+def _session_end_ms(trace: Dict[str, Any], micro_tensors: List[Dict[str, Any]]) -> float:
+    """Latest observed timestamp in the session (events, outcome records or window ends)."""
+    timestamps: List[float] = []
+    for event in trace.get("behaviourEvents", []):
+        try:
+            timestamps.append(float(event.get("timestamp")))
+        except (TypeError, ValueError):
+            continue
+    for record in trace.get("outcomes", []):
+        if isinstance(record, dict):
+            timestamp = record_timestamp(record)
+            if timestamp is not None:
+                timestamps.append(timestamp)
+    for window in micro_tensors:
+        try:
+            timestamps.append(float(window.get("windowEnd")))
+        except (TypeError, ValueError):
+            continue
+    return max(timestamps) if timestamps else 0.0
+
+
+def _resolve_candidate(record: Dict[str, Any], behaviour_events: List[Dict[str, Any]],
+                       has_semantic_contract: bool) -> Dict[str, Any]:
+    """Resolve one outcome record to a candidate semantic act (or an implicit no-act)."""
+    source_event = None
+    if record.get("taskOutcome") is None and not has_semantic_contract:
+        source_event = find_source_event(record, behaviour_events)
+    name, source = resolve_target_label(record, has_semantic_contract, source_event)
+    return {"name": name, "source": source}
+
+
+def _semantic_candidates(
+    outcomes: List[Dict[str, Any]],
+    behaviour_events: List[Dict[str, Any]],
+    has_semantic_contract: bool,
+    horizon_start: float,
+    horizon_end: float,
+) -> List[Dict[str, Any]]:
+    """Outcome records inside the horizon that represent a semantic act."""
+    candidates: List[Dict[str, Any]] = []
+    for record in outcomes:
+        timestamp = record_timestamp(record)
+        if timestamp is None or not (horizon_start <= timestamp <= horizon_end):
+            continue
+        resolved = _resolve_candidate(record, behaviour_events, has_semantic_contract)
+        # An implicit "no semantic act" record is not a candidate: a later semantic act inside
+        # the horizon is still the next target.
+        if resolved["name"] == NO_OUTCOME and resolved["source"] == "trace_no_outcome":
+            continue
+        candidates.append({
+            "timestamp": timestamp,
+            "name": resolved["name"],
+            "source": resolved["source"],
+            "record": record,
+        })
+    return candidates
+
+
+def _select_candidate(
+    candidates: List[Dict[str, Any]],
+    anchor_end_ms: float,
+    lookahead_min_ms: float,
+    lookahead_max_ms: float,
+) -> Dict[str, Any]:
+    synthetic = [
+        {"sourceEventTimestamp": candidate["timestamp"], "taskOutcome": candidate["name"],
+         "_candidate": candidate}
+        for candidate in candidates
+    ]
+    selected = select_target_record(synthetic, anchor_end_ms, lookahead_min_ms, lookahead_max_ms)
+    return selected["_candidate"]  # type: ignore[index]
+
+
+def _resolve_semantic_target(
+    outcomes: List[Dict[str, Any]],
+    behaviour_events: List[Dict[str, Any]],
+    session_end_ms: float,
+    has_semantic_contract: bool,
+    anchor_end_ms: float,
+    lookahead_min_ms: float,
+    lookahead_max_ms: float,
+) -> Dict[str, Any]:
+    """Resolve the future semantic target for one anchor window.
+
+    Returns ``{"status": "labelled", ...}`` or an exclusion status. The horizon must close
+    inside the session; an incomplete lookahead is excluded rather than labelled, because a
+    missing future window is not evidence that nothing happened.
+    """
+    horizon_end = anchor_end_ms + lookahead_max_ms
+    if horizon_end > session_end_ms:
+        return {"status": "excluded_incomplete"}
+
+    candidates = _semantic_candidates(
+        outcomes, behaviour_events, has_semantic_contract,
+        anchor_end_ms + lookahead_min_ms, horizon_end,
+    )
+    if not candidates:
+        return {
+            "status": "labelled",
+            "label": NO_OUTCOME,
+            "source": "lookahead_no_outcome",
+            "timestamp": None,
+            "lead_time_ms": None,
+        }
+
+    chosen = _select_candidate(candidates, anchor_end_ms, lookahead_min_ms, lookahead_max_ms)
+    if chosen["name"] in RECORDED_ONLY_OUTCOMES:
+        return {"status": "excluded_recorded_only", "label": chosen["name"]}
+
+    return {
+        "status": "labelled",
+        "label": chosen["name"],
+        "source": chosen["source"],
+        "timestamp": chosen["timestamp"],
+        "lead_time_ms": chosen["timestamp"] - anchor_end_ms,
+    }
+
+
+def _validate_build_options(
+    target: str,
+    lookahead_min_ms: Optional[float],
+    lookahead_max_ms: Optional[float],
+) -> Tuple[float, float]:
+    if target not in ("intervention", "semantic"):
+        raise ValueError(f"Unknown target '{target}'; expected 'intervention' or 'semantic'")
+    minimum = DEFAULT_LOOKAHEAD_MS[0] if lookahead_min_ms is None else float(lookahead_min_ms)
+    maximum = DEFAULT_LOOKAHEAD_MS[1] if lookahead_max_ms is None else float(lookahead_max_ms)
+    if maximum <= minimum:
+        raise ValueError(
+            f"Invalid lookahead horizon: max ({maximum}) must exceed min ({minimum})"
+        )
+    return minimum, maximum
+
+
+def _build_summary_stats(
+    target: str,
+    trace_count: int,
+    candidate_windows: int,
+    rows: List[Dict[str, Any]],
+    exclusions: Dict[str, int],
+    label_sources: Dict[str, int],
+    lookahead_min: float,
+    lookahead_max: float,
+) -> Dict[str, Any]:
+    return {
+        "target": target,
+        "total_traces": trace_count,
+        "total_candidate_windows": candidate_windows,
+        "total_retained_examples": len(rows),
+        "excluded_missing_context": exclusions.get("excluded_missing_context", 0),
+        "excluded_incomplete_lookahead": exclusions.get("excluded_incomplete", 0),
+        "excluded_recorded_only": exclusions.get("excluded_recorded_only", 0),
+        "label_sources": label_sources,
+        "target_vocabulary_version": TARGET_VOCABULARY_VERSION,
+        "recorded_vocabulary_version": RECORDED_VOCABULARY_VERSION,
+        "lookahead_horizon_ms": [lookahead_min, lookahead_max],
+        "distribution": compute_label_distribution(
+            [row["target_intervention"] for row in rows]
+        ),
+    }
+
+
+def _trace_files(trace_dir: Union[str, Path]) -> List[str]:
+    files = sorted(glob.glob(str(Path(trace_dir) / "*.json")))
+    files = [path for path in files if not Path(path).name.startswith("manifest")]
+    if not files:
+        raise FileNotFoundError(f"No trace JSON files found in {trace_dir}")
+    return files
+
+
+def _trace_context(trace_file: str) -> Dict[str, Any]:
+    """Per-trace identifiers, records and session end, read once per file."""
+    with open(trace_file, "r", encoding="utf-8") as fp:
+        trace = json.load(fp)
+
+    session = trace.get("session", {})
+    task_info = trace.get("task", {})
+    metadata = trace.get("metadata", {}) if isinstance(trace.get("metadata"), dict) else {}
+    micro_tensors = trace.get("microTensors", [])
+    if isinstance(micro_tensors, list):
+        micro_tensors = sorted(micro_tensors, key=lambda window: window.get("windowId", 0))
+    else:
+        micro_tensors = []
+
+    outcome_records = [
+        record for record in trace.get("outcomes", []) if isinstance(record, dict)
+    ]
+    return {
+        "session_id": str(session.get("sessionId", Path(trace_file).stem)),
+        "experiment_id": str(session.get("experimentId", "unknown")),
+        "condition_id": str(session.get("conditionId", "unknown")),
+        "default_task_id": str(task_info.get("currentTaskId") or session.get("taskId") or "T1"),
+        "task_definition_version": (
+            metadata.get("taskDefinitionVersion") or task_info.get("definitionVersion")
+        ),
+        "recorded_vocabulary_version": metadata.get("semanticOutcomeVocabularyVersion"),
+        "has_semantic_contract": bool(metadata.get("semanticOutcomeVocabularyVersion"))
+        or str(trace.get("schemaVersion")) == "1.4.0",
+        "outcomes": outcome_records,
+        "outcomes_map": {
+            record["windowId"]: record for record in outcome_records if "windowId" in record
+        },
+        "behaviour_events": trace.get("behaviourEvents", []),
+        "micro_tensors": micro_tensors,
+        "session_end_ms": _session_end_ms(trace, micro_tensors),
+    }
+
+
+def _sequence_matrix(window_slice: List[Dict[str, Any]]) -> List[List[float]]:
+    matrix: List[List[float]] = []
+    for window in window_slice:
+        values = list(window.get("values", []))
+        if len(values) < 18:
+            values = values + [0.0] * (18 - len(values))
+        matrix.append([float(value) for value in values[:18]])
+    return matrix
+
+
+def _sequence_event_ids(
+    session_id: str,
+    behaviour_events: List[Dict[str, Any]],
+    start_ms: float,
+    end_ms: float,
+) -> List[str]:
+    event_ids = [
+        f"{session_id}:ev_{index}"
+        for index, event in enumerate(behaviour_events)
+        if start_ms <= float(event.get("timestamp", 0.0)) <= end_ms
+    ]
+    if not event_ids and behaviour_events:
+        # Fallback to the nearest prior event when the span has no event of its own.
+        event_ids = [f"{session_id}:ev_{len(behaviour_events) - 1}"]
+    return event_ids
+
+
+def _anchor_context(
+    context: Dict[str, Any],
+    anchor_window: Dict[str, Any],
+    anchor_window_id: Any,
+) -> Tuple[Dict[str, Any], str, str, Dict[str, Any]]:
+    """Anchor outcome record, generic outcome name, anchor task id and UIContext snapshot."""
+    anchor_end = float(anchor_window.get("windowEnd", 0))
+    outcome_record = context["outcomes_map"].get(anchor_window_id, {})
+    outcome_name = outcome_record.get("outcome", "NO_OUTCOME")
+    task_id = outcome_record.get("taskId") or context["default_task_id"]
+    step_id = outcome_record.get("taskStepId")
+    route = outcome_record.get("route", "Analytics")
+    if not step_id:
+        for event in reversed(context["behaviour_events"]):
+            if event.get("timestamp", 0) <= anchor_end and event.get("taskStepId"):
+                step_id = event.get("taskStepId")
+                route = event.get("route", route)
+                break
+
+    is_analytics = route == "Analytics"
+    ui_context = {
+        "route": route,
+        "primaryActionAvailable": is_analytics,
+        "helpAvailable": is_analytics,
+        "expandable": is_analytics,
+        "taskId": task_id,
+        "taskStepId": step_id,
+        "availableActions": ["click", "change", "hover"] if is_analytics else ["click"],
+    }
+    return outcome_record, outcome_name, task_id, ui_context
+
+
+def _encode_context(ui_context: Dict[str, Any]) -> Optional[np.ndarray]:
+    try:
+        context_vec = encode_ui_context(ui_context)
+        if not validate_context_vector(context_vec).valid:
+            return None
+        return context_vec
+    except Exception:
+        return None
+
+
+_OUTCOME_TAXONOMY_MAP = {
+    "NO_OUTCOME": 0,
+    "CLICK": 1,
+    "FORM_SUBMIT": 2,
+    "BACKTRACK": 3,
+    "RAPID_SCROLL": 4,
+    "HOVER_DWELL": 5,
+    "ABANDON": 6,
+}
+
+
+def _row_payload(
+    context: Dict[str, Any],
+    task_id: str,
+    anchor_window_id: Any,
+    seq_matrix: List[List[float]],
+    context_vec: np.ndarray,
+    seq_event_ids: List[str],
+    label_info: Dict[str, Any],
+    outcome_name: str,
+    semantic: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """One dataset row. Branch-free: all label decisions were made by the caller."""
+    semantic_label = semantic["label"] if semantic else None
+    return {
+        "session_id": context["session_id"],
+        "experiment_id": context["experiment_id"],
+        "condition_id": context["condition_id"],
+        "task_id": task_id,
+        "anchor_window_id": int(anchor_window_id),
+        "sequence": seq_matrix,
+        "context_vector": context_vec.tolist(),
+        "target_outcome": outcome_name,
+        "target_outcome_id": _OUTCOME_TAXONOMY_MAP.get(outcome_name, 0),
+        "target_intervention": label_info["target_intervention"],
+        "target_intervention_id": int(label_info["target_intervention_id"]),
+        "label_policy_version": str(label_info["label_policy_version"]),
+        "is_scripted_policy": True,
+        "split": "unassigned",
+        "source_event_ids": seq_event_ids,
+        "preprocessing_version": PREPROCESSING_VERSION,
+        "feature_schema_version": FEATURE_SCHEMA_VERSION,
+        "target_generation_version": LABEL_POLICY_VERSION,
+        "target_task_outcome": semantic_label,
+        "target_task_outcome_id": (
+            target_outcome_id(semantic_label)
+            if semantic_label and is_target_outcome(semantic_label)
+            else None
+        ),
+        "target_vocabulary_version": TARGET_VOCABULARY_VERSION if semantic else None,
+        "recorded_vocabulary_version": (
+            context["recorded_vocabulary_version"] if semantic else None
+        ),
+        "task_definition_version": context["task_definition_version"],
+        "target_label_source": semantic["source"] if semantic else None,
+        "target_event_timestamp": semantic["timestamp"] if semantic else None,
+        "lead_time_ms": semantic["lead_time_ms"] if semantic else None,
+    }
+
+
+def _build_example(
+    context: Dict[str, Any],
+    index: int,
+    seq_len: int,
+    target: str,
+    lookahead_min: float,
+    lookahead_max: float,
+) -> Dict[str, Any]:
+    """Build one example, or return an exclusion status."""
+    window_slice = context["micro_tensors"][index: index + seq_len]
+    anchor_window = window_slice[-1]
+    anchor_window_id = anchor_window.get("windowId", 0)
+    anchor_end = float(anchor_window.get("windowEnd", 0))
+
+    semantic: Optional[Dict[str, Any]] = None
+    if target == "semantic":
+        semantic = _resolve_semantic_target(
+            context["outcomes"],
+            context["behaviour_events"],
+            context["session_end_ms"],
+            context["has_semantic_contract"],
+            anchor_end,
+            lookahead_min,
+            lookahead_max,
+        )
+        if semantic["status"] != "labelled":
+            return {"status": semantic["status"]}
+
+    seq_matrix = _sequence_matrix(window_slice)
+    seq_event_ids = _sequence_event_ids(
+        context["session_id"], context["behaviour_events"],
+        float(window_slice[0].get("windowStart", 0.0)) - 250.0, anchor_end,
+    )
+    _, outcome_name, task_id, ui_context = _anchor_context(
+        context, anchor_window, anchor_window_id
+    )
+
+    context_vec = _encode_context(ui_context)
+    if context_vec is None:
+        return {"status": "excluded_missing_context"}
+
+    ui_context["taskProgress"] = float(context_vec[4])
+    label_info = assign_intervention_label(outcome_name, ui_context)
+    row = _row_payload(
+        context, task_id, anchor_window_id, seq_matrix, context_vec, seq_event_ids,
+        label_info, outcome_name, semantic,
+    )
+    return {"status": "labelled", "row": row}
 
 
 def build_target_dataset_from_traces(
@@ -116,180 +540,232 @@ def build_target_dataset_from_traces(
     output_path: Optional[Union[str, Path]] = None,
     seq_len: int = 8,
     stride: int = 1,
+    target: str = "intervention",
+    lookahead_min_ms: Optional[float] = None,
+    lookahead_max_ms: Optional[float] = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """Build the target dataset from a directory of ExperimentTrace JSON files.
+
+    ``target="intervention"`` keeps the prior-milestone behaviour: labels come from the anchor
+    window's generic outcome and the scripted intervention policy. ``target="semantic"`` adds a
+    causal future semantic label (Task 40.2) and excludes windows that cannot carry one.
+
+    Returns ``(rows, summary_stats)``.
     """
-    Builds the target-domain dataset from a directory of ExperimentTrace JSON files.
-    Carries full provenance per example (Brief §8):
-    session_id, experiment_id, condition_id, task_id, anchor_window_id,
-    source_event_ids, preprocessing_version, feature_schema_version, target_generation_version.
+    lookahead_min, lookahead_max = _validate_build_options(
+        target, lookahead_min_ms, lookahead_max_ms
+    )
 
-    Returns:
-        (rows, summary_stats)
-    """
-    trace_dir = Path(trace_dir)
-    trace_files = sorted(glob.glob(str(trace_dir / "*.json")))
-
-    # Exclude manifest.json if present
-    trace_files = [f for f in trace_files if not Path(f).name.startswith("manifest")]
-
-    if not trace_files:
-        raise FileNotFoundError(f"No trace JSON files found in {trace_dir}")
-
+    trace_files = _trace_files(trace_dir)
     all_rows: List[Dict[str, Any]] = []
-    excluded_missing_context = 0
+    exclusions: Dict[str, int] = {}
+    label_sources: Dict[str, int] = {}
     total_candidate_windows = 0
 
     for trace_file in trace_files:
-        with open(trace_file, "r", encoding="utf-8") as fp:
-            trace = json.load(fp)
-
-        session = trace.get("session", {})
-        session_id = str(session.get("sessionId", Path(trace_file).stem))
-        experiment_id = str(session.get("experimentId", "unknown"))
-        condition_id = str(session.get("conditionId", "unknown"))
-
-        task_info = trace.get("task", {})
-        default_task_id = str(task_info.get("currentTaskId") or session.get("taskId") or "T1")
-
-        # Map outcomes by windowId
-        outcomes_map = {}
-        for out in trace.get("outcomes", []):
-            if isinstance(out, dict) and "windowId" in out:
-                outcomes_map[out["windowId"]] = out
-
-        # Map behavioural events and context snapshots
-        behaviour_events = trace.get("behaviourEvents", [])
-
-        micro_tensors = trace.get("microTensors", [])
-        if not micro_tensors or len(micro_tensors) < seq_len:
+        context = _trace_context(trace_file)
+        if len(context["micro_tensors"]) < seq_len:
             continue
-
-        # Sort windows by windowId
-        micro_tensors = sorted(micro_tensors, key=lambda w: w.get("windowId", 0))
-
-        # Assemble sequence windows
-        for s in range(0, len(micro_tensors) - seq_len + 1, stride):
+        for index in range(0, len(context["micro_tensors"]) - seq_len + 1, stride):
             total_candidate_windows += 1
-            window_slice = micro_tensors[s : s + seq_len]
-            anchor_window = window_slice[-1]
-            anchor_wid = anchor_window.get("windowId", 0)
-
-            # Build sequence matrix (T, 18)
-            seq_matrix = []
-            for w in window_slice:
-                vals = w.get("values", [])
-                if len(vals) != 18:
-                    vals = list(vals) + [0.0] * (18 - len(vals))
-                seq_matrix.append([float(v) for v in vals[:18]])
-
-            # Correlate source events across the sequence window span
-            # Window duration is 500 ms with settlement delay 250 ms, so sequence span
-            # starts 250 ms before the first window's start.
-            seq_start_ts = float(window_slice[0].get("windowStart", 0.0)) - 250.0
-            seq_end_ts = float(anchor_window.get("windowEnd", 0.0))
-
-            seq_event_ids = [
-                f"{session_id}:ev_{ev_idx}"
-                for ev_idx, ev in enumerate(behaviour_events)
-                if seq_start_ts <= float(ev.get("timestamp", 0.0)) <= seq_end_ts
-            ]
-            if not seq_event_ids and behaviour_events:
-                # Fallback to nearest prior event if gap exists
-                seq_event_ids = [f"{session_id}:ev_{len(behaviour_events) - 1}"]
-
-            # Resolve anchor outcome
-            outcome_rec = outcomes_map.get(anchor_wid, {})
-            outcome_name = outcome_rec.get("outcome", "NO_OUTCOME")
-
-            # Resolve UIContext for anchor window
-            anchor_end = anchor_window.get("windowEnd", 0)
-            anchor_task = outcome_rec.get("taskId") or default_task_id
-            anchor_step = outcome_rec.get("taskStepId")
-
-            # If not on outcome, look for nearest behaviour event preceding or during anchor
-            anchor_route = outcome_rec.get("route", "Analytics")
-            if not anchor_step:
-                for ev in reversed(behaviour_events):
-                    if ev.get("timestamp", 0) <= anchor_end and ev.get("taskStepId"):
-                        anchor_step = ev.get("taskStepId")
-                        anchor_route = ev.get("route", anchor_route)
-                        break
-
-            # Construct UIContext snapshot
-            is_analytics = (anchor_route == "Analytics")
-            ui_context = {
-                "route": anchor_route,
-                "primaryActionAvailable": is_analytics,
-                "helpAvailable": is_analytics,
-                "expandable": is_analytics,
-                "taskId": anchor_task,
-                "taskStepId": anchor_step,
-                "availableActions": ["click", "change", "hover"] if is_analytics else ["click"],
-            }
-
-            try:
-                context_vec = encode_ui_context(ui_context)
-                val_res = validate_context_vector(context_vec)
-                if not val_res.valid:
-                    excluded_missing_context += 1
-                    continue
-            except Exception:
-                excluded_missing_context += 1
+            result = _build_example(
+                context, index, seq_len, target, lookahead_min, lookahead_max
+            )
+            if result["status"] != "labelled":
+                exclusions[result["status"]] = exclusions.get(result["status"], 0) + 1
                 continue
-
-            # Assign scripted intervention label with explicit taskProgress from encoded context vector
-            ui_context["taskProgress"] = float(context_vec[4])
-            label_info = assign_intervention_label(outcome_name, ui_context)
-
-            outcome_taxonomy_map = {
-                "NO_OUTCOME": 0,
-                "CLICK": 1,
-                "FORM_SUBMIT": 2,
-                "BACKTRACK": 3,
-                "RAPID_SCROLL": 4,
-                "HOVER_DWELL": 5,
-                "ABANDON": 6,
-            }
-            outcome_id = outcome_taxonomy_map.get(outcome_name, 0)
-
-            row = {
-                "session_id": session_id,
-                "experiment_id": experiment_id,
-                "condition_id": condition_id,
-                "task_id": anchor_task,
-                "anchor_window_id": int(anchor_wid),
-                "sequence": seq_matrix,
-                "context_vector": context_vec.tolist(),
-                "target_outcome": outcome_name,
-                "target_outcome_id": outcome_id,
-                "target_intervention": label_info["target_intervention"],
-                "target_intervention_id": int(label_info["target_intervention_id"]),
-                "label_policy_version": str(label_info["label_policy_version"]),
-                "is_scripted_policy": True,
-                "split": "unassigned",
-                "source_event_ids": seq_event_ids,
-                "preprocessing_version": PREPROCESSING_VERSION,
-                "feature_schema_version": FEATURE_SCHEMA_VERSION,
-                "target_generation_version": LABEL_POLICY_VERSION,
-            }
+            row = result["row"]
+            if target == "semantic":
+                label_sources[row["target_label_source"]] = (
+                    label_sources.get(row["target_label_source"], 0) + 1
+                )
             all_rows.append(row)
 
-    # Compute distribution
-    intervention_labels = [r["target_intervention"] for r in all_rows]
-    distribution = compute_label_distribution(intervention_labels)
-
-    summary_stats = {
-        "total_traces": len(trace_files),
-        "total_candidate_windows": total_candidate_windows,
-        "total_retained_examples": len(all_rows),
-        "excluded_missing_context": excluded_missing_context,
-        "distribution": distribution,
-    }
+    summary_stats = _build_summary_stats(
+        target, len(trace_files), total_candidate_windows, all_rows,
+        exclusions, label_sources, lookahead_min, lookahead_max,
+    )
 
     if output_path and PYARROW_AVAILABLE and all_rows:
         save_target_dataset_parquet(all_rows, output_path, seq_len=seq_len)
 
     return all_rows, summary_stats
+
+
+def _session_partitions(
+    rows: List[Dict[str, Any]],
+    train_ratio: float,
+    val_ratio: float,
+    random_seed: int,
+) -> Tuple[Set[str], Set[str], Set[str], List[str]]:
+    """Deterministic session-bounded partition assignment (zero session/task leakage)."""
+    sessions = sorted({row["session_id"] for row in rows})
+    if len(sessions) < 3:
+        raise ValueError(
+            f"Insufficient distinct sessions for train/val/test split: found {len(sessions)}"
+        )
+
+    shuffled = sessions.copy()
+    np.random.RandomState(random_seed).shuffle(shuffled)
+    n_train = int(round(len(sessions) * train_ratio))
+    n_val = int(round(len(sessions) * val_ratio))
+    train = set(shuffled[:n_train])
+    val = set(shuffled[n_train: n_train + n_val])
+    test = set(shuffled[n_train + n_val:])
+
+    assert train.isdisjoint(val), "Train and Val sessions must be disjoint"
+    assert train.isdisjoint(test), "Train and Test sessions must be disjoint"
+    assert val.isdisjoint(test), "Val and Test sessions must be disjoint"
+
+    train_pairs = {(row["session_id"], row["task_id"]) for row in rows if row["session_id"] in train}
+    val_pairs = {(row["session_id"], row["task_id"]) for row in rows if row["session_id"] in val}
+    test_pairs = {(row["session_id"], row["task_id"]) for row in rows if row["session_id"] in test}
+    assert train_pairs.isdisjoint(val_pairs), "Train and Val (session, task) pairs must be disjoint"
+    assert train_pairs.isdisjoint(test_pairs), "Train and Test (session, task) pairs must be disjoint"
+    assert val_pairs.isdisjoint(test_pairs), "Val and Test (session, task) pairs must be disjoint"
+    return train, val, test, sessions
+
+
+def _assign_splits(
+    rows: List[Dict[str, Any]],
+    train: Set[str],
+    val: Set[str],
+    test: Set[str],
+) -> None:
+    for row in rows:
+        session_id = row["session_id"]
+        if session_id in train:
+            row["split"] = "train"
+        elif session_id in val:
+            row["split"] = "val"
+        elif session_id in test:
+            row["split"] = "test"
+        else:
+            raise ValueError(f"Unpartitioned session encountered: {session_id}")
+
+
+def _partition_rows(rows: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    return {
+        "train": [row for row in rows if row["split"] == "train"],
+        "val": [row for row in rows if row["split"] == "val"],
+        "test": [row for row in rows if row["split"] == "test"],
+    }
+
+
+def _partition_statistics(
+    partitions: Dict[str, List[Dict[str, Any]]],
+    rows: List[Dict[str, Any]],
+    vocabulary: List[str],
+    label_key: str,
+) -> Tuple[Dict[str, Any], Dict[str, List[str]], Dict[str, Dict[str, int]], Dict[str, List[str]]]:
+    class_distribution: Dict[str, Any] = {}
+    absent_classes: Dict[str, List[str]] = {}
+    task_coverage: Dict[str, Dict[str, int]] = {}
+
+    for partition, partition_rows in partitions.items():
+        distribution = compute_label_distribution(
+            [row[label_key] for row in partition_rows], vocabulary=vocabulary
+        )
+        class_distribution[partition] = distribution
+        absent_classes[partition] = [
+            name for name, count in distribution["counts"].items() if count == 0
+        ]
+        coverage: Dict[str, int] = {}
+        for row in partition_rows:
+            task = str(row.get("task_id", "unknown"))
+            coverage[task] = coverage.get(task, 0) + 1
+        task_coverage[partition] = dict(sorted(coverage.items()))
+
+    class_distribution["overall"] = compute_label_distribution(
+        [row[label_key] for row in rows], vocabulary=vocabulary
+    )
+    all_tasks = sorted({str(row.get("task_id", "unknown")) for row in rows})
+    tasks_absent = {
+        partition: [task for task in all_tasks if task not in task_coverage[partition]]
+        for partition in partitions
+    }
+    return class_distribution, absent_classes, task_coverage, tasks_absent
+
+
+def _majority_baselines(
+    partitions: Dict[str, List[Dict[str, Any]]],
+    class_distribution: Dict[str, Any],
+    vocabulary: List[str],
+    majority_class: str,
+    majority_id: int,
+) -> Dict[str, Any]:
+    baselines: Dict[str, Any] = {}
+    for partition, partition_rows in partitions.items():
+        total = len(partition_rows)
+        if total == 0:
+            baselines[partition] = {"accuracy": 0.0, "macro_f1": 0.0, "support": {}}
+            continue
+
+        counts = class_distribution[partition]["counts"]
+        accuracy = float(counts.get(majority_class, 0) / total)
+        f1_scores: List[float] = []
+        per_class_f1: Dict[str, float] = {}
+        for name in vocabulary:
+            support = counts.get(name, 0)
+            if name == majority_class and support > 0:
+                precision = support / total
+                f1 = (2 * precision / (precision + 1.0)) if precision else 0.0
+            else:
+                f1 = 0.0
+            per_class_f1[name] = float(f1)
+            if support > 0:
+                f1_scores.append(f1)
+
+        baselines[partition] = {
+            "majority_class": majority_class,
+            "majority_class_id": majority_id,
+            "accuracy": accuracy,
+            "macro_f1": float(np.mean(f1_scores)) if f1_scores else 0.0,
+            "per_class_f1": per_class_f1,
+            "support": counts,
+        }
+    return baselines
+
+
+def _resolve_class_weights(
+    partitions: Dict[str, List[Dict[str, Any]]],
+    vocabulary: List[str],
+    id_key: str,
+    strategy: str,
+    smoothing_alpha: float,
+) -> Dict[str, Any]:
+    train_targets = np.array([row[id_key] for row in partitions["train"]])
+    num_classes = len(vocabulary)
+    if strategy == "smoothed":
+        weights = compute_class_weights(
+            train_targets, num_classes=num_classes, smoothing_alpha=smoothing_alpha,
+            allow_empty=True,
+        )
+    elif strategy == "inverse":
+        weights = compute_class_weights(
+            train_targets, num_classes=num_classes, smoothing_alpha=0.0, allow_empty=True
+        )
+    elif strategy == "none":
+        weights = (
+            torch.ones(num_classes, dtype=torch.float32)
+            if TORCH_AVAILABLE else np.ones(num_classes, dtype=np.float32)
+        )
+    else:
+        raise ValueError(
+            f"Unknown imbalance_strategy: '{strategy}'. Expected 'smoothed', 'inverse', or 'none'."
+        )
+
+    values = weights.numpy() if hasattr(weights, "numpy") else np.asarray(weights)
+    max_weight = float(np.max(values))
+    positive = values[values > 0]
+    min_weight = float(np.min(positive)) if positive.size else 0.0
+    return {
+        "strategy": strategy,
+        "smoothing_alpha": smoothing_alpha if strategy == "smoothed" else 0.0,
+        "derived_on": "train_partition_only",
+        "weights": {vocabulary[i]: float(values[i]) for i in range(num_classes)},
+        "max_min_ratio": (max_weight / min_weight) if min_weight > 0 else 0.0,
+    }
 
 
 def split_target_dataset(
@@ -299,179 +775,63 @@ def split_target_dataset(
     random_seed: int = 42,
     imbalance_strategy: str = "smoothed",
     smoothing_alpha: float = 10.0,
+    label_key: str = "target_intervention",
+    id_key: str = "target_intervention_id",
+    vocabulary: Optional[List[str]] = None,
+    label_name: str = "intervention",
+    build_stats: Optional[Dict[str, Any]] = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """
-    Produce strictly session-bounded train / validation / test splits for the intervention-head
-    dataset and resolve class weights exclusively on the training partition (Task 11.1).
+    Produce strictly session-bounded train / validation / test splits and resolve class weights
+    exclusively on the training partition (Task 11.1 / Task 40.2).
 
-    Enforces:
-    - Zero cross-split leakage: no session and no task within a session appears in two partitions.
-    - Class weights resolved strictly on the training partition; test/val examples exert 0 influence.
-    - Explicit detection and reporting of absent classes per partition.
-    - Evaluation of the majority-class baseline across all partitions.
+    The label column is configurable so the same split contract serves the intervention dataset
+    and the semantic task-outcome dataset. Session is the split unit (ADR-031); class weights,
+    absent-class declarations and majority baselines are resolved from the declared partitions.
     """
     if not rows:
         raise ValueError("Cannot split an empty list of rows")
 
-    # 1. Distinct sessions in sorted order for deterministic shuffling
-    sessions = sorted(list({r["session_id"] for r in rows}))
-    n_total = len(sessions)
-    if n_total < 3:
-        raise ValueError(f"Insufficient distinct sessions for train/val/test split: found {n_total}")
+    vocab = list(vocabulary) if vocabulary is not None else list(INTERVENTION_VOCABULARY)
+    if not vocab:
+        raise ValueError("The split vocabulary must not be empty")
 
-    rng = np.random.RandomState(random_seed)
-    shuffled_sessions = sessions.copy()
-    rng.shuffle(shuffled_sessions)
-
-    n_train = int(round(n_total * train_ratio))
-    n_val = int(round(n_total * val_ratio))
-
-    train_sessions: Set[str] = set(shuffled_sessions[:n_train])
-    val_sessions: Set[str] = set(shuffled_sessions[n_train : n_train + n_val])
-    test_sessions: Set[str] = set(shuffled_sessions[n_train + n_val :])
-
-    # Assert pairwise disjointness
-    assert train_sessions.isdisjoint(val_sessions), "Train and Val sessions must be disjoint"
-    assert train_sessions.isdisjoint(test_sessions), "Train and Test sessions must be disjoint"
-    assert val_sessions.isdisjoint(test_sessions), "Val and Test sessions must be disjoint"
-
-    # Verify task-session pairs are disjoint across splits
-    train_st = {(r["session_id"], r["task_id"]) for r in rows if r["session_id"] in train_sessions}
-    val_st = {(r["session_id"], r["task_id"]) for r in rows if r["session_id"] in val_sessions}
-    test_st = {(r["session_id"], r["task_id"]) for r in rows if r["session_id"] in test_sessions}
-    assert train_st.isdisjoint(val_st), "Train and Val (session, task) pairs must be disjoint"
-    assert train_st.isdisjoint(test_st), "Train and Test (session, task) pairs must be disjoint"
-    assert val_st.isdisjoint(test_st), "Val and Test (session, task) pairs must be disjoint"
-
-    # 2. Assign split to every row
-    for r in rows:
-        sid = r["session_id"]
-        if sid in train_sessions:
-            r["split"] = "train"
-        elif sid in val_sessions:
-            r["split"] = "val"
-        elif sid in test_sessions:
-            r["split"] = "test"
-        else:
-            raise ValueError(f"Unpartitioned session encountered: {sid}")
-
-    # 3. Compute per-partition statistics
-    partitions = {
-        "train": [r for r in rows if r["split"] == "train"],
-        "val": [r for r in rows if r["split"] == "val"],
-        "test": [r for r in rows if r["split"] == "test"],
-    }
-
-    class_distribution: Dict[str, Any] = {}
-    absent_classes: Dict[str, List[str]] = {}
-
-    for p_name, p_rows in partitions.items():
-        labels = [r["target_intervention"] for r in p_rows]
-        dist = compute_label_distribution(labels)
-        class_distribution[p_name] = dist
-        absent = [cls for cls, cnt in dist["counts"].items() if cnt == 0]
-        absent_classes[p_name] = absent
-
-    class_distribution["overall"] = compute_label_distribution([r["target_intervention"] for r in rows])
-
-    # 4. Derive majority baseline (majority class determined by train partition only)
-    train_majority_class = class_distribution["train"]["majority_class"]
-    train_majority_id = INTERVENTION_TO_ID[train_majority_class]
-
-    majority_baselines: Dict[str, Any] = {}
-    for p_name, p_rows in partitions.items():
-        p_n = len(p_rows)
-        if p_n == 0:
-            majority_baselines[p_name] = {"accuracy": 0.0, "macro_f1": 0.0, "support": {}}
-            continue
-
-        p_counts = class_distribution[p_name]["counts"]
-        correct = p_counts.get(train_majority_class, 0)
-        acc = float(correct / p_n)
-
-        # Macro-F1 across supported classes in partition
-        f1_list = []
-        per_class_f1 = {}
-        for cls_name in INTERVENTION_VOCABULARY:
-            support = p_counts.get(cls_name, 0)
-            if cls_name == train_majority_class:
-                tp = support
-                fp = p_n - support
-                prec = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-                rec = 1.0 if support > 0 else 0.0
-                f1 = (2 * prec * rec / (prec + rec)) if (prec + rec) > 0 else 0.0
-            else:
-                f1 = 0.0
-
-            per_class_f1[cls_name] = float(f1)
-            if support > 0:
-                f1_list.append(f1)
-
-        macro_f1 = float(np.mean(f1_list)) if f1_list else 0.0
-        majority_baselines[p_name] = {
-            "majority_class": train_majority_class,
-            "majority_class_id": train_majority_id,
-            "accuracy": acc,
-            "macro_f1": macro_f1,
-            "per_class_f1": per_class_f1,
-            "support": p_counts,
-        }
-
-    # 5. Resolve Class Weights on TRAINING PARTITION ONLY
-    train_targets = np.array([r["target_intervention_id"] for r in partitions["train"]])
-    num_classes = len(INTERVENTION_VOCABULARY)
-
-    if imbalance_strategy == "smoothed":
-        weights_t = compute_class_weights(
-            train_targets,
-            num_classes=num_classes,
-            smoothing_alpha=smoothing_alpha,
-            allow_empty=True
-        )
-    elif imbalance_strategy == "inverse":
-        weights_t = compute_class_weights(
-            train_targets,
-            num_classes=num_classes,
-            smoothing_alpha=0.0,
-            allow_empty=True
-        )
-    elif imbalance_strategy == "none":
-        weights_t = torch.ones(num_classes, dtype=torch.float32) if TORCH_AVAILABLE else np.ones(num_classes, dtype=np.float32)
-    else:
-        raise ValueError(f"Unknown imbalance_strategy: '{imbalance_strategy}'. Expected 'smoothed', 'inverse', or 'none'.")
-
-    weights_np = weights_t.numpy() if hasattr(weights_t, "numpy") else np.asarray(weights_t)
-    resolved_weights = {
-        INTERVENTION_VOCABULARY[i]: float(weights_np[i])
-        for i in range(num_classes)
-    }
-
-    max_w = float(np.max(weights_np))
-    min_w = float(np.min(weights_np[weights_np > 0])) if np.any(weights_np > 0) else 0.0
-    max_min_ratio = (max_w / min_w) if min_w > 0 else 0.0
-
-    imbalance_rationale = (
-        f"Imbalance strategy: '{imbalance_strategy}' (alpha={smoothing_alpha if imbalance_strategy == 'smoothed' else 0.0}). "
-        f"Resolved exclusively on the training partition ({len(partitions['train'])} examples, 13 sessions) "
-        f"to prevent test-set label balance from leaking into training. Preserves full sample density without "
-        f"synthetic duplication (no oversampling)."
+    train, val, test, sessions = _session_partitions(rows, train_ratio, val_ratio, random_seed)
+    _assign_splits(rows, train, val, test)
+    partitions = _partition_rows(rows)
+    class_distribution, absent_classes, task_coverage, tasks_absent = _partition_statistics(
+        partitions, rows, vocab, label_key
+    )
+    majority_class = class_distribution["train"]["majority_class"]
+    majority_id = vocab.index(majority_class)
+    baselines = _majority_baselines(
+        partitions, class_distribution, vocab, majority_class, majority_id
+    )
+    class_weights = _resolve_class_weights(
+        partitions, vocab, id_key, imbalance_strategy, smoothing_alpha
     )
 
-    split_summary = {
+    rationale = (
+        f"Imbalance strategy: '{imbalance_strategy}' "
+        f"(alpha={class_weights['smoothing_alpha']}). Resolved exclusively on the training "
+        f"partition ({len(partitions['train'])} examples, {len(train)} sessions) to prevent "
+        f"test-set label balance from leaking into training. Preserves full sample density "
+        f"without synthetic duplication (no oversampling)."
+    )
+    summary: Dict[str, Any] = {
         "split_strategy": "session_bounded",
+        "split_unit": "session",
+        "label_key": label_key,
+        "label_name": label_name,
+        "label_vocabulary": vocab,
         "random_seed": random_seed,
         "train_ratio": train_ratio,
         "val_ratio": val_ratio,
         "session_counts": {
-            "train": len(train_sessions),
-            "val": len(val_sessions),
-            "test": len(test_sessions),
-            "total": n_total,
+            "train": len(train), "val": len(val), "test": len(test), "total": len(sessions),
         },
         "sessions": {
-            "train": sorted(list(train_sessions)),
-            "val": sorted(list(val_sessions)),
-            "test": sorted(list(test_sessions)),
+            "train": sorted(train), "val": sorted(val), "test": sorted(test),
         },
         "example_counts": {
             "train": len(partitions["train"]),
@@ -481,19 +841,25 @@ def split_target_dataset(
         },
         "class_distribution": class_distribution,
         "absent_classes": absent_classes,
-        "majority_baseline": majority_baselines,
+        "task_coverage": task_coverage,
+        "tasks_absent": tasks_absent,
+        "majority_baseline": baselines,
         "imbalance_strategy": imbalance_strategy,
-        "imbalance_rationale": imbalance_rationale,
-        "class_weights": {
-            "strategy": imbalance_strategy,
-            "smoothing_alpha": smoothing_alpha if imbalance_strategy == "smoothed" else 0.0,
-            "derived_on": "train_partition_only",
-            "weights": resolved_weights,
-            "max_min_ratio": max_min_ratio,
-        },
+        "imbalance_rationale": rationale,
+        "class_weights": class_weights,
     }
-
-    return rows, split_summary
+    if build_stats:
+        summary["build_stats"] = {
+            key: value for key, value in build_stats.items()
+            if key in (
+                "target", "total_traces", "total_candidate_windows",
+                "excluded_missing_context", "excluded_incomplete_lookahead",
+                "excluded_recorded_only", "label_sources",
+                "target_vocabulary_version", "recorded_vocabulary_version",
+                "lookahead_horizon_ms",
+            )
+        }
+    return rows, summary
 
 
 def save_target_dataset_parquet(
@@ -522,10 +888,14 @@ def save_target_dataset_parquet(
     }
     if split_summary:
         custom_metadata["split_strategy"] = str(split_summary.get("split_strategy"))
+        custom_metadata["split_unit"] = str(split_summary.get("split_unit", "session"))
         custom_metadata["split_seed"] = str(split_summary.get("random_seed"))
         custom_metadata["train_examples"] = str(split_summary.get("example_counts", {}).get("train", 0))
         custom_metadata["val_examples"] = str(split_summary.get("example_counts", {}).get("val", 0))
         custom_metadata["test_examples"] = str(split_summary.get("example_counts", {}).get("test", 0))
+    if rows and rows[0].get("target_vocabulary_version"):
+        custom_metadata["target_vocabulary_version"] = str(rows[0]["target_vocabulary_version"])
+        custom_metadata["recorded_vocabulary_version"] = str(rows[0].get("recorded_vocabulary_version"))
 
     schema_with_meta = TARGET_DATASET_SCHEMA.with_metadata(custom_metadata)
     table = pa.Table.from_pylist(rows, schema=schema_with_meta)
@@ -534,66 +904,82 @@ def save_target_dataset_parquet(
     return str(out_file)
 
 
-def print_split_report(split_summary: Dict[str, Any]) -> None:
-    """Prints a structured CLI partition report covering Task 11.1 requirements."""
-    print("=" * 80)
-    print("      TARGET-DOMAIN INTERVENTION DATASET: SESSION-BOUNDED SPLIT REPORT")
-    print("=" * 80)
-    sc = split_summary["session_counts"]
-    ec = split_summary["example_counts"]
-    print(f"Split Strategy:     {split_summary['split_strategy']} (zero temporal leakage)")
-    print(f"Random Seed:        {split_summary['random_seed']}")
-    print(f"Total Sessions:     {sc['total']} (Train: {sc['train']}, Val: {sc['val']}, Test: {sc['test']})")
-    print(f"Total Examples:     {ec['total']} (Train: {ec['train']}, Val: {ec['val']}, Test: {ec['test']})")
-    print("-" * 80)
-
-    print("PER-PARTITION CLASS DISTRIBUTION (5-CLASS VOCABULARY):")
+def _print_class_table(summary: Dict[str, Any], vocabulary: List[str], label_name: str) -> None:
+    print(f"PER-PARTITION CLASS DISTRIBUTION ({len(vocabulary)}-CLASS {label_name} VOCABULARY):")
     print(f"{'Class Name':<26} {'Train Count (%)':<20} {'Val Count (%)':<18} {'Test Count (%)':<18}")
     print("-" * 80)
+    distributions = summary["class_distribution"]
+    for name in vocabulary:
+        cells = []
+        for partition in ("train", "val", "test"):
+            count = distributions[partition]["counts"].get(name, 0)
+            percent = distributions[partition]["percentages"].get(name, 0.0)
+            cells.append(f"{count:>4} ({percent:>5.1f}%)")
+        print(f"  {name:<24}: {cells[0]:<20} {cells[1]:<18} {cells[2]:<18}")
 
-    train_dist = split_summary["class_distribution"]["train"]
-    val_dist = split_summary["class_distribution"]["val"]
-    test_dist = split_summary["class_distribution"]["test"]
 
-    for cls_name in INTERVENTION_VOCABULARY:
-        tr_c = train_dist["counts"].get(cls_name, 0)
-        tr_p = train_dist["percentages"].get(cls_name, 0.0)
-        v_c = val_dist["counts"].get(cls_name, 0)
-        v_p = val_dist["percentages"].get(cls_name, 0.0)
-        te_c = test_dist["counts"].get(cls_name, 0)
-        te_p = test_dist["percentages"].get(cls_name, 0.0)
-
-        tr_str = f"{tr_c:>4} ({tr_p:>5.1f}%)"
-        v_str = f"{v_c:>3} ({v_p:>5.1f}%)"
-        te_str = f"{te_c:>3} ({te_p:>5.1f}%)"
-        print(f"  {cls_name:<24}: {tr_str:<20} {v_str:<18} {te_str:<18}")
-
-    print("-" * 80)
+def _print_coverage(summary: Dict[str, Any], vocabulary: List[str]) -> None:
     print("ABSENT CLASSES PER PARTITION:")
-    for p_name in ["train", "val", "test"]:
-        absent = split_summary["absent_classes"][p_name]
-        absent_str = ", ".join(absent) if absent else "None (all 5 classes represented)"
-        print(f"  {p_name.capitalize():<8}: {absent_str}")
-
+    for partition in ("train", "val", "test"):
+        absent = summary["absent_classes"][partition]
+        text = ", ".join(absent) if absent else f"None (all {len(vocabulary)} classes represented)"
+        print(f"  {partition.capitalize():<8}: {text}")
     print("-" * 80)
+    print("TASK-LEVEL COVERAGE PER PARTITION:")
+    for partition in ("train", "val", "test"):
+        coverage = summary.get("task_coverage", {}).get(partition, {})
+        text = ", ".join(f"{task}={count}" for task, count in coverage.items()) or "none"
+        print(f"  {partition.capitalize():<8}: {text}")
+
+
+def _print_baselines(summary: Dict[str, Any]) -> None:
     print("MAJORITY-CLASS BASELINES (Evaluated against training majority class):")
-    for p_name in ["train", "val", "test"]:
-        base = split_summary["majority_baseline"][p_name]
+    for partition in ("train", "val", "test"):
+        base = summary["majority_baseline"][partition]
         print(
-            f"  {p_name.capitalize():<8}: Majority Class: '{base['majority_class']}' | "
-            f"Accuracy: {base['accuracy'] * 100:.1f}% | "
-            f"Macro-F1: {base['macro_f1']:.4f}"
+            f"  {partition.capitalize():<8}: Majority Class: '{base['majority_class']}' | "
+            f"Accuracy: {base['accuracy'] * 100:.1f}% | Macro-F1: {base['macro_f1']:.4f}"
         )
 
+
+def _print_class_weights(summary: Dict[str, Any]) -> None:
+    weights = summary["class_weights"]
+    print(f"CLASS WEIGHTS RESOLUTION ({weights['derived_on'].upper()}):")
+    print(f"  Strategy:         {weights['strategy']} (alpha={weights['smoothing_alpha']})")
+    print(f"  Max/Min Ratio:    {weights['max_min_ratio']:.2f}")
+    for name, weight in weights["weights"].items():
+        print(f"    {name:<24}: {weight:.4f}")
+
+
+def print_split_report(split_summary: Dict[str, Any]) -> None:
+    """Prints a structured CLI partition report (Task 11.1 / Task 40.3)."""
+    vocabulary = split_summary.get("label_vocabulary") or list(INTERVENTION_VOCABULARY)
+    label_name = str(split_summary.get("label_name") or "intervention").upper()
+    session_counts = split_summary["session_counts"]
+    example_counts = split_summary["example_counts"]
+
+    print("=" * 80)
+    print(f"      TARGET-DOMAIN {label_name} DATASET: SESSION-BOUNDED SPLIT REPORT")
+    print("=" * 80)
+    print(f"Split Strategy:     {split_summary['split_strategy']} (session unit, zero temporal leakage)")
+    print(f"Random Seed:        {split_summary['random_seed']}")
+    print(f"Total Sessions:     {session_counts['total']} (Train: {session_counts['train']}, "
+          f"Val: {session_counts['val']}, Test: {session_counts['test']})")
+    print(f"Total Examples:     {example_counts['total']} (Train: {example_counts['train']}, "
+          f"Val: {example_counts['val']}, Test: {example_counts['test']})")
     print("-" * 80)
-    cw = split_summary["class_weights"]
-    print(f"CLASS WEIGHTS RESOLUTION ({cw['derived_on'].upper()}):")
-    print(f"  Strategy:         {cw['strategy']} (alpha={cw['smoothing_alpha']})")
-    print(f"  Max/Min Ratio:    {cw['max_min_ratio']:.2f}")
-    for cls_name, w in cw["weights"].items():
-        print(f"    {cls_name:<24}: {w:.4f}")
+    _print_class_table(split_summary, vocabulary, label_name)
     print("-" * 80)
-    print("Claim Notice:        Labels are scripted policy outputs (ADR-013).")
+    _print_coverage(split_summary, vocabulary)
+    print("-" * 80)
+    _print_baselines(split_summary)
+    print("-" * 80)
+    _print_class_weights(split_summary)
+    print("-" * 80)
+    if label_name == "INTERVENTION":
+        print("Claim Notice:        Labels are scripted policy outputs (ADR-013).")
+    else:
+        print("Claim Notice:        Labels are future semantic acts; scripted captures are engineering evidence.")
     print("=" * 80)
 
 
@@ -656,6 +1042,22 @@ class TargetInterventionDataset(torch.utils.data.Dataset if TORCH_AVAILABLE else
         return {}
 
 
+def _empty_intervention_dataset() -> TargetInterventionDataset:
+    if TORCH_AVAILABLE:
+        return TargetInterventionDataset(
+            torch.empty((0, 8, 18), dtype=torch.float32),
+            torch.empty((0, 6), dtype=torch.float32),
+            torch.empty(0, dtype=torch.long),
+            metadata=[],
+        )
+    return TargetInterventionDataset(
+        np.empty((0, 8, 18), dtype=np.float32),
+        np.empty((0, 6), dtype=np.float32),
+        np.empty(0, dtype=np.int64),
+        metadata=[],
+    )
+
+
 def load_intervention_dataset(
     version: str = "v1.0.0",
     split: str = "train",
@@ -693,10 +1095,7 @@ def load_intervention_dataset(
         df = df[df["split"] == split]
 
     if len(df) == 0:
-        empty_seq = torch.empty((0, 8, 18), dtype=torch.float32) if TORCH_AVAILABLE else np.empty((0, 8, 18), dtype=np.float32)
-        empty_ctx = torch.empty((0, 6), dtype=torch.float32) if TORCH_AVAILABLE else np.empty((0, 6), dtype=np.float32)
-        empty_tgt = torch.empty(0, dtype=torch.long) if TORCH_AVAILABLE else np.empty(0, dtype=np.int64)
-        return TargetInterventionDataset(empty_seq, empty_ctx, empty_tgt, metadata=[])
+        return _empty_intervention_dataset()
 
     seq_raw = df["sequence"].values
     ctx_raw = df["context_vector"].values
@@ -756,8 +1155,10 @@ def get_intervention_class_weights(
     return np.asarray(weights_list, dtype=np.float32)
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Assemble TargetInterventionHead Dataset & Splits (Tasks 10.3, 11.1, 11.2).")
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Assemble TargetInterventionHead Dataset & Splits (Tasks 10.3, 11.1, 11.2)."
+    )
     parser.add_argument("--trace-dir", type=str, default=".data/raw/scripted", help="Input directory of traces")
     parser.add_argument("--output", type=str, default=None, help="Output Parquet path (defaults to versioned directory)")
     parser.add_argument("--build-labels", action="store_true", help="Build labels and report class distribution")
@@ -765,87 +1166,166 @@ def main():
     parser.add_argument("--build-manifest", action="store_true", help="Generate provenance-versioned dataset manifest")
     parser.add_argument("--validate-manifest", type=str, default=None, help="Path to manifest JSON to validate")
     parser.add_argument("--version", type=str, default="v1.0.0", help="Dataset version identifier")
+    parser.add_argument(
+        "--target", type=str, default="auto", choices=["auto", "intervention", "semantic"],
+        help="Label target; 'auto' selects semantic when --version contains 'semantic'"
+    )
+    parser.add_argument("--lookahead-min-ms", type=float, default=None, help="Semantic lookahead minimum (ms)")
+    parser.add_argument("--lookahead-max-ms", type=float, default=None, help="Semantic lookahead maximum (ms)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for deterministic split")
     parser.add_argument("--train-ratio", type=float, default=0.70, help="Train split ratio")
     parser.add_argument("--val-ratio", type=float, default=0.15, help="Val split ratio")
-    parser.add_argument("--imbalance-strategy", type=str, default="smoothed", choices=["smoothed", "inverse", "none"], help="Class imbalance handling strategy")
+    parser.add_argument("--imbalance-strategy", type=str, default="smoothed",
+                        choices=["smoothed", "inverse", "none"], help="Class imbalance handling strategy")
     parser.add_argument("--smoothing-alpha", type=float, default=10.0, help="Smoothing alpha for class weights")
     parser.add_argument("--seq-len", type=int, default=8, help="Sequence length T")
-    args = parser.parse_args()
+    return parser
 
+
+def _resolve_target(args: argparse.Namespace) -> str:
+    if args.target != "auto":
+        return args.target
+    return "semantic" if "semantic" in args.version else "intervention"
+
+
+def _split_kwargs(args: argparse.Namespace, target: str, stats: Dict[str, Any]) -> Dict[str, Any]:
+    kwargs: Dict[str, Any] = dict(
+        train_ratio=args.train_ratio,
+        val_ratio=args.val_ratio,
+        random_seed=args.seed,
+        imbalance_strategy=args.imbalance_strategy,
+        smoothing_alpha=args.smoothing_alpha,
+        build_stats=stats,
+    )
+    if target == "semantic":
+        kwargs.update(
+            label_key="target_task_outcome",
+            id_key="target_task_outcome_id",
+            vocabulary=list(TARGET_VOCABULARY.values()),
+            label_name="semantic",
+        )
+    return kwargs
+
+
+def _print_dataset_summary(stats: Dict[str, Any], target: str) -> None:
+    distribution = stats["distribution"]
+    print("=" * 70)
+    print("TARGET-DOMAIN INTERVENTION DATASET SUMMARY")
+    print(f"Traces Ingested:           {stats['total_traces']}")
+    print(f"Total Candidate Sequences: {stats['total_candidate_windows']}")
+    print(f"Retained Examples:         {stats['total_retained_examples']}")
+    print(f"Excluded Missing Context:  {stats['excluded_missing_context']}")
+    print("-" * 70)
+    print("CLASS DISTRIBUTION (5-CLASS INTERVENTION VOCABULARY):")
+    for name in INTERVENTION_VOCABULARY:
+        count = distribution["counts"][name]
+        percent = distribution["percentages"][name]
+        print(f"  {name:<25}: {count:>4} ({percent:>5.1f}%)")
+    print("-" * 70)
+    print(f"Majority Baseline Class:   {distribution['majority_class']} "
+          f"({distribution['majority_percentage']:.1f}%)")
+    print(f"Policy Version:            {LABEL_POLICY_VERSION}")
+    if target == "semantic":
+        print("-" * 70)
+        print(f"Semantic Target Version:   {stats['target_vocabulary_version']}")
+        print(f"Lookahead Horizon (ms):    {stats['lookahead_horizon_ms']}")
+        print(f"Excluded Incomplete:       {stats['excluded_incomplete_lookahead']}")
+        print(f"Excluded Recorded-Only:    {stats['excluded_recorded_only']}")
+        print(f"Semantic Label Sources:    {stats['label_sources']}")
+        print("Claim Notice:              Future semantic labels; engineering evidence only.")
+    else:
+        print("Claim Notice:              Labels are scripted policy outputs (ADR-013).")
+    print("=" * 70)
+
+
+def _validate_manifest_cli(path: str, trace_dir: str) -> None:
+    try:
+        from data_manager import validate_dataset_manifest
+    except ImportError:
+        from src.data_manager import validate_dataset_manifest
+    result = validate_dataset_manifest(path, trace_dir=trace_dir)
+    print(f"[TargetDataset] Manifest validation successful: {result}")
+
+
+def _export_dataset(
+    args: argparse.Namespace,
+    rows: List[Dict[str, Any]],
+    split_summary: Optional[Dict[str, Any]],
+    version_dir: Path,
+    out_parquet_path: Path,
+) -> None:
+    if not (args.build_labels or args.split or args.build_manifest):
+        return
+    save_target_dataset_parquet(
+        rows, out_parquet_path, seq_len=args.seq_len, split_summary=split_summary
+    )
+    _write_convenience_copy(args, rows, split_summary, out_parquet_path)
+    _write_manifest(args, rows, split_summary, version_dir)
+
+
+def _write_convenience_copy(
+    args: argparse.Namespace,
+    rows: List[Dict[str, Any]],
+    split_summary: Optional[Dict[str, Any]],
+    out_parquet_path: Path,
+) -> None:
+    root_parquet = Path(".data/processed/target_intervention_dataset.parquet")
+    if args.output is not None or out_parquet_path.resolve() == root_parquet.resolve():
+        return
+    save_target_dataset_parquet(
+        rows, root_parquet, seq_len=args.seq_len, split_summary=split_summary
+    )
+
+
+def _write_manifest(
+    args: argparse.Namespace,
+    rows: List[Dict[str, Any]],
+    split_summary: Optional[Dict[str, Any]],
+    version_dir: Path,
+) -> None:
+    if not args.build_manifest or split_summary is None:
+        return
+    try:
+        from data_manager import create_dataset_manifest
+    except ImportError:
+        from src.data_manager import create_dataset_manifest
+    create_dataset_manifest(
+        rows=rows,
+        split_summary=split_summary,
+        trace_dir=args.trace_dir,
+        output_path=version_dir / "manifest.json",
+        dataset_version=args.version,
+    )
+
+
+def main() -> None:
+    args = _build_parser().parse_args()
     if args.validate_manifest:
-        try:
-            from data_manager import validate_dataset_manifest
-        except ImportError:
-            from src.data_manager import validate_dataset_manifest
-        res = validate_dataset_manifest(args.validate_manifest, trace_dir=args.trace_dir)
-        print(f"[TargetDataset] Manifest validation successful: {res}")
+        _validate_manifest_cli(args.validate_manifest, args.trace_dir)
         return
 
-    # Resolve output parquet path
-    version_dir = Path(f".data/processed/{args.version}")
-    default_parquet = version_dir / "target_intervention_dataset.parquet"
-    out_parquet_path = Path(args.output) if args.output else default_parquet
-
+    target = _resolve_target(args)
     rows, stats = build_target_dataset_from_traces(
         trace_dir=args.trace_dir,
         output_path=None,
         seq_len=args.seq_len,
+        target=target,
+        lookahead_min_ms=args.lookahead_min_ms,
+        lookahead_max_ms=args.lookahead_max_ms,
     )
-
     split_summary = None
     if args.split or args.build_manifest:
-        rows, split_summary = split_target_dataset(
-            rows,
-            train_ratio=args.train_ratio,
-            val_ratio=args.val_ratio,
-            random_seed=args.seed,
-            imbalance_strategy=args.imbalance_strategy,
-            smoothing_alpha=args.smoothing_alpha,
-        )
+        rows, split_summary = split_target_dataset(rows, **_split_kwargs(args, target, stats))
         print_split_report(split_summary)
     else:
-        dist = stats["distribution"]
-        print("=" * 70)
-        print("TARGET-DOMAIN INTERVENTION DATASET SUMMARY")
-        print(f"Traces Ingested:           {stats['total_traces']}")
-        print(f"Total Candidate Sequences: {stats['total_candidate_windows']}")
-        print(f"Retained Examples:         {stats['total_retained_examples']}")
-        print(f"Excluded Missing Context:  {stats['excluded_missing_context']}")
-        print("-" * 70)
-        print("CLASS DISTRIBUTION (5-CLASS INTERVENTION VOCABULARY):")
-        for cls_name in INTERVENTION_VOCABULARY:
-            count = dist["counts"][cls_name]
-            pct = dist["percentages"][cls_name]
-            print(f"  {cls_name:<25}: {count:>4} ({pct:>5.1f}%)")
-        print("-" * 70)
-        print(f"Majority Baseline Class:   {dist['majority_class']} ({dist['majority_percentage']:.1f}%)")
-        print(f"Policy Version:            {LABEL_POLICY_VERSION}")
-        print("Claim Notice:              Labels are scripted policy outputs (ADR-013).")
-        print("=" * 70)
+        _print_dataset_summary(stats, target)
 
-    # Save parquet if requested or if split/build-manifest
-    if args.build_labels or args.split or args.build_manifest:
-        save_target_dataset_parquet(rows, out_parquet_path, seq_len=args.seq_len, split_summary=split_summary)
-        # Also copy / save to root .data/processed/target_intervention_dataset.parquet for convenience
-        root_parquet = Path(".data/processed/target_intervention_dataset.parquet")
-        if out_parquet_path.resolve() != root_parquet.resolve():
-            root_parquet.parent.mkdir(parents=True, exist_ok=True)
-            save_target_dataset_parquet(rows, root_parquet, seq_len=args.seq_len, split_summary=split_summary)
-
-    if args.build_manifest and split_summary is not None:
-        try:
-            from data_manager import create_dataset_manifest
-        except ImportError:
-            from src.data_manager import create_dataset_manifest
-        manifest_path = version_dir / "manifest.json"
-        create_dataset_manifest(
-            rows=rows,
-            split_summary=split_summary,
-            trace_dir=args.trace_dir,
-            output_path=manifest_path,
-            dataset_version=args.version,
-        )
+    version_dir = Path(f".data/processed/{args.version}")
+    out_parquet_path = (
+        Path(args.output) if args.output
+        else version_dir / "target_intervention_dataset.parquet"
+    )
+    _export_dataset(args, rows, split_summary, version_dir, out_parquet_path)
 
 
 if __name__ == "__main__":

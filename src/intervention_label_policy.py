@@ -129,28 +129,39 @@ def assign_intervention_label(
     }
 
 
-def compute_label_distribution(labels: List[str]) -> Dict[str, Any]:
-    """Computes class counts and percentages across the 5-class intervention vocabulary."""
+def compute_label_distribution(
+    labels: List[str],
+    vocabulary: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Computes class counts and percentages for a declared vocabulary.
+
+    Defaults to the 5-class intervention vocabulary. Labels outside the vocabulary are counted
+    as ``unmapped`` instead of being silently folded into another class, so a label/vocabulary
+    mismatch stays visible.
+    """
+    vocab = list(vocabulary) if vocabulary is not None else list(INTERVENTION_VOCABULARY)
     total = len(labels)
-    counts = {name: 0 for name in INTERVENTION_VOCABULARY}
+    counts = {name: 0 for name in vocab}
+    unmapped = 0
     for lbl in labels:
         if lbl in counts:
             counts[lbl] += 1
         else:
-            counts["no_op"] += 1
+            unmapped += 1
 
     percentages = {
         name: (float(count) / total * 100.0) if total > 0 else 0.0
         for name, count in counts.items()
     }
 
-    majority_class = max(counts, key=counts.get) if total > 0 else "no_op"
+    majority_class = max(counts, key=counts.get) if total > 0 else vocab[-1]
     majority_percentage = percentages.get(majority_class, 0.0)
 
     return {
         "total_examples": total,
         "counts": counts,
         "percentages": percentages,
+        "unmapped": unmapped,
         "majority_class": majority_class,
         "majority_percentage": majority_percentage,
     }

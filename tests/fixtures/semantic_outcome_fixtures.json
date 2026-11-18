@@ -1,0 +1,101 @@
+{
+  "description": "Cross-language semantic outcome fixtures. The expected IDs are the ones the TypeScript TestbedSemanticVocabulary derives (edge-aui-framework/src/testbed/config/semanticOutcomes.ts). Pinned for Python parity in Task 40.2.",
+  "recorded_vocabulary_version": "testbed-semantic/1.0.0",
+  "cases": [
+    {
+      "name": "export button is export_report",
+      "event": {"type": "click", "componentId": "btn-export", "componentRole": "primary-action"},
+      "expected": "export_report"
+    },
+    {
+      "name": "reset filters button is reset_filter",
+      "event": {"type": "click", "componentId": "btn-reset-filters", "componentRole": "primary-action"},
+      "expected": "reset_filter"
+    },
+    {
+      "name": "submit-annotated apply click is apply_filter",
+      "event": {"type": "click", "componentId": "btn-apply-filters", "componentRole": "submit-action"},
+      "expected": "apply_filter"
+    },
+    {
+      "name": "form submit is apply_filter",
+      "event": {"type": "submit", "componentId": "filter-drawer", "componentRole": "filter"},
+      "expected": "apply_filter"
+    },
+    {
+      "name": "report open is select_report",
+      "event": {"type": "click", "componentId": "open-report-eu-books", "componentRole": "report-action"},
+      "expected": "select_report"
+    },
+    {
+      "name": "tooltip-region is inspect_help, never select_region",
+      "event": {"type": "click", "componentId": "tooltip-region", "componentRole": "tooltip"},
+      "expected": "inspect_help"
+    },
+    {
+      "name": "tooltip role is inspect_help",
+      "event": {"type": "click", "componentId": "kpi-tooltip", "componentRole": "tooltip"},
+      "expected": "inspect_help"
+    },
+    {
+      "name": "accordion open",
+      "event": {"type": "click", "componentId": "filter-section-region", "componentRole": "accordion", "ariaExpanded": true},
+      "expected": "open_filter_section"
+    },
+    {
+      "name": "accordion close",
+      "event": {"type": "click", "componentId": "filter-section-region", "componentRole": "accordion", "ariaExpanded": false},
+      "expected": "close_filter_section"
+    },
+    {
+      "name": "accordion click with no observed disclosure is not guessed",
+      "event": {"type": "click", "componentId": "filter-section-region", "componentRole": "accordion"},
+      "expected": null
+    },
+    {
+      "name": "committed region change",
+      "event": {"type": "change", "componentId": "filter-Region-select", "componentRole": "filter"},
+      "expected": "select_region"
+    },
+    {
+      "name": "input companion of region change is not a second outcome",
+      "event": {"type": "input", "componentId": "filter-Region-select", "componentRole": "filter"},
+      "expected": null
+    },
+    {
+      "name": "committed date change",
+      "event": {"type": "change", "componentId": "filter-date-input", "componentRole": "filter"},
+      "expected": "select_date_range"
+    },
+    {
+      "name": "committed category change",
+      "event": {"type": "change", "componentId": "filter-category-books", "componentRole": "filter"},
+      "expected": "select_category"
+    },
+    {
+      "name": "substring lookalike is not a region selection",
+      "event": {"type": "change", "componentId": "not-region-but-similar", "componentRole": "filter"},
+      "expected": null
+    },
+    {
+      "name": "navigation control click",
+      "event": {"type": "click", "componentId": "nav-Analytics", "componentRole": "navigation"},
+      "expected": "navigate_analytics"
+    },
+    {
+      "name": "row hover is not a selection",
+      "event": {"type": "mouseover", "componentId": "table-row-42", "componentRole": "table-row"},
+      "expected": null
+    },
+    {
+      "name": "mousedown is not the committed act",
+      "event": {"type": "mousedown", "componentId": "btn-export", "componentRole": "primary-action"},
+      "expected": null
+    },
+    {
+      "name": "system-initiated action is not a participant outcome",
+      "event": {"type": "click", "componentId": "btn-export", "componentRole": "primary-action", "systemInitiated": true},
+      "expected": null
+    }
+  ]
+}

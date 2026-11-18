@@ -47,16 +47,10 @@ def get_hf_token(token: Optional[str] = None) -> Optional[str]:
 
     return None
 
-def find_project_root() -> Path:
-    """
-    Traverse upwards to locate project root (containing src/, requirements.txt, or .git).
-    Falls back to current working directory if not located.
-    """
-    current = Path(os.getcwd()).resolve()
-    for parent in [current] + list(current.parents):
-        if (parent / "src").is_dir() or (parent / "requirements.txt").is_file() or (parent / ".git").is_dir():
-            return parent
-    return current
+try:
+    from data import find_project_root
+except ImportError:  # running as src.*
+    from src.data import find_project_root
 
 
 # ============================================================================
@@ -402,6 +396,62 @@ def compute_dataset_content_hash(rows: List[Dict[str, Any]]) -> str:
     return hasher.hexdigest()[:12]
 
 
+def _manifest_example(row: Dict[str, Any]) -> Dict[str, Any]:
+    example = {
+        "example_id": f"{row.get('session_id')}:w{row.get('anchor_window_id')}",
+        "session_id": str(row.get("session_id", "")),
+        "experiment_id": str(row.get("experiment_id", "")),
+        "condition_id": str(row.get("condition_id", "")),
+        "task_id": str(row.get("task_id", "")),
+        "anchor_window_id": int(row.get("anchor_window_id", 0)),
+        "source_event_ids": list(row.get("source_event_ids", [])),
+        "preprocessing_version": str(row.get("preprocessing_version", PREPROCESSING_VERSION)),
+        "feature_schema_version": str(row.get("feature_schema_version", FEATURE_SCHEMA_VERSION)),
+        "target_generation_version": str(row.get("target_generation_version", LABEL_POLICY_VERSION)),
+        "split": str(row.get("split", "unassigned")),
+        "target_outcome": str(row.get("target_outcome", "NO_OUTCOME")),
+        "target_outcome_id": int(row.get("target_outcome_id", 0)),
+        "target_intervention": str(row.get("target_intervention", "no_op")),
+        "target_intervention_id": int(row.get("target_intervention_id", 4)),
+        "label_policy_version": str(row.get("label_policy_version", LABEL_POLICY_VERSION)),
+        "is_scripted_policy": bool(row.get("is_scripted_policy", True)),
+    }
+    if row.get("target_task_outcome"):
+        example.update({
+            "target_task_outcome": str(row["target_task_outcome"]),
+            "target_task_outcome_id": int(row.get("target_task_outcome_id", -1)),
+            "target_vocabulary_version": str(row.get("target_vocabulary_version", "")),
+            "recorded_vocabulary_version": str(row.get("recorded_vocabulary_version") or ""),
+            "task_definition_version": str(row.get("task_definition_version") or ""),
+            "target_label_source": str(row.get("target_label_source") or ""),
+            "target_event_timestamp": row.get("target_event_timestamp"),
+            "lead_time_ms": row.get("lead_time_ms"),
+        })
+    return example
+
+
+def _target_semantics_header(
+    rows: List[Dict[str, Any]], split_summary: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
+    semantic_rows = [row for row in rows if row.get("target_task_outcome")]
+    if not semantic_rows:
+        return None
+    first = semantic_rows[0]
+    build_stats = split_summary.get("build_stats", {})
+    return {
+        "target_vocabulary_version": str(first.get("target_vocabulary_version") or ""),
+        "recorded_vocabulary_version": str(first.get("recorded_vocabulary_version") or ""),
+        "target_vocabulary": list(split_summary.get("label_vocabulary", [])),
+        "split_unit": str(split_summary.get("split_unit", "session")),
+        "label_sources": dict(build_stats.get("label_sources", {})),
+        "excluded_incomplete_lookahead": int(
+            build_stats.get("excluded_incomplete_lookahead", 0)
+        ),
+        "excluded_recorded_only": int(build_stats.get("excluded_recorded_only", 0)),
+        "lookahead_horizon_ms": build_stats.get("lookahead_horizon_ms"),
+    }
+
+
 def create_dataset_manifest(
     rows: List[Dict[str, Any]],
     split_summary: Dict[str, Any],
@@ -415,36 +465,13 @@ def create_dataset_manifest(
     """
     content_hash = compute_dataset_content_hash(rows)
     resolved_version = dataset_version or f"v1.0.0-{content_hash}"
-    created_at = datetime.now(timezone.utc).isoformat()
+    manifest_examples = [_manifest_example(row) for row in rows]
 
-    manifest_examples: List[Dict[str, Any]] = []
-    for r in rows:
-        ex = {
-            "example_id": f"{r.get('session_id')}:w{r.get('anchor_window_id')}",
-            "session_id": str(r.get("session_id", "")),
-            "experiment_id": str(r.get("experiment_id", "")),
-            "condition_id": str(r.get("condition_id", "")),
-            "task_id": str(r.get("task_id", "")),
-            "anchor_window_id": int(r.get("anchor_window_id", 0)),
-            "source_event_ids": list(r.get("source_event_ids", [])),
-            "preprocessing_version": str(r.get("preprocessing_version", PREPROCESSING_VERSION)),
-            "feature_schema_version": str(r.get("feature_schema_version", FEATURE_SCHEMA_VERSION)),
-            "target_generation_version": str(r.get("target_generation_version", LABEL_POLICY_VERSION)),
-            "split": str(r.get("split", "unassigned")),
-            "target_outcome": str(r.get("target_outcome", "NO_OUTCOME")),
-            "target_outcome_id": int(r.get("target_outcome_id", 0)),
-            "target_intervention": str(r.get("target_intervention", "no_op")),
-            "target_intervention_id": int(r.get("target_intervention_id", 4)),
-            "label_policy_version": str(r.get("label_policy_version", LABEL_POLICY_VERSION)),
-            "is_scripted_policy": bool(r.get("is_scripted_policy", True)),
-        }
-        manifest_examples.append(ex)
-
-    manifest = {
+    manifest: Dict[str, Any] = {
         "manifest_schema_version": MANIFEST_SCHEMA_VERSION,
         "dataset_version": resolved_version,
         "content_hash": content_hash,
-        "created_at": created_at,
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "source_data_type": "scripted_substitute_testbed",
         "claim_boundary": ADR_013_CLAIM_BOUNDARY,
         "provenance_spec": {
@@ -462,18 +489,249 @@ def create_dataset_manifest(
         "total_examples": len(manifest_examples),
         "examples": manifest_examples,
     }
+    target_semantics = _target_semantics_header(rows, split_summary)
+    if target_semantics is not None:
+        manifest["target_semantics"] = target_semantics
 
-    if output_path is None:
-        out_p = Path(f".data/processed/{resolved_version}/manifest.json")
-    else:
-        out_p = Path(output_path)
+    out_path = Path(output_path) if output_path is not None else (
+        Path(f".data/processed/{resolved_version}/manifest.json")
+    )
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_path, "w", encoding="utf-8") as handle:
+        json.dump(manifest, handle, indent=2)
 
-    out_p.parent.mkdir(parents=True, exist_ok=True)
-    with open(out_p, "w", encoding="utf-8") as fp:
-        json.dump(manifest, fp, indent=2)
+    print(f"[DataManager] Provenance-versioned manifest written to: {out_path}")
+    return manifest, out_path
 
-    print(f"[DataManager] Provenance-versioned manifest written to: {out_p}")
-    return manifest, out_p
+
+def _load_manifest(manifest_path_or_dict: Union[str, Path, Dict[str, Any]]) -> Dict[str, Any]:
+    if isinstance(manifest_path_or_dict, (str, Path)):
+        path = Path(manifest_path_or_dict)
+        if not path.is_file():
+            raise ManifestValidationError(f"Manifest file does not exist: {path}")
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                return json.load(handle)
+        except Exception as exc:
+            raise ManifestValidationError(f"Failed to parse manifest JSON from {path}: {exc}")
+    if isinstance(manifest_path_or_dict, dict):
+        return manifest_path_or_dict
+    raise ManifestValidationError(
+        f"Expected path or dict, received: {type(manifest_path_or_dict)}"
+    )
+
+
+def _validate_header(manifest: Dict[str, Any]) -> List[Dict[str, Any]]:
+    for header in (
+        "manifest_schema_version", "dataset_version", "claim_boundary", "code_versions",
+        "split_summary", "class_weights", "total_examples", "examples",
+    ):
+        if header not in manifest or manifest[header] is None:
+            raise ManifestValidationError(
+                f"Manifest is missing required header field: '{header}'"
+            )
+    examples = manifest["examples"]
+    if not isinstance(examples, list) or not examples:
+        raise ManifestValidationError("Manifest contains no examples or examples is not a list")
+    if len(examples) != manifest["total_examples"]:
+        raise ManifestValidationError(
+            f"Total examples mismatch: header declared {manifest['total_examples']}, "
+            f"found {len(examples)}"
+        )
+    return examples
+
+
+def _validate_code_versions(manifest: Dict[str, Any]) -> None:
+    versions = manifest["code_versions"]
+    checks = (
+        ("preprocessing_version", PREPROCESSING_VERSION, "Preprocessing"),
+        ("feature_schema_version", FEATURE_SCHEMA_VERSION, "Feature schema"),
+        ("label_policy_version", LABEL_POLICY_VERSION, "Label policy"),
+    )
+    for key, expected, label in checks:
+        if versions.get(key) != expected:
+            raise ManifestValidationError(
+                f"{label} version mismatch: manifest has '{versions.get(key)}', "
+                f"code requires '{expected}'"
+            )
+
+
+def _validate_splits_and_weights(
+    manifest: Dict[str, Any]
+) -> Tuple[Set[str], Set[str], Set[str]]:
+    sessions = manifest["split_summary"].get("sessions", {})
+    train = set(sessions.get("train", []))
+    val = set(sessions.get("val", []))
+    test = set(sessions.get("test", []))
+    if not train.isdisjoint(val):
+        raise ManifestValidationError(
+            f"Non-disjoint splits: Train and Val overlap on {train & val}"
+        )
+    if not train.isdisjoint(test):
+        raise ManifestValidationError(
+            f"Non-disjoint splits: Train and Test overlap on {train & test}"
+        )
+    if not val.isdisjoint(test):
+        raise ManifestValidationError(
+            f"Non-disjoint splits: Val and Test overlap on {val & test}"
+        )
+    derived_on = manifest.get("class_weights", {}).get("derived_on")
+    if derived_on != "train_partition_only":
+        raise ManifestValidationError(
+            f"Class weights provenance invalid: expected 'train_partition_only', "
+            f"received '{derived_on}'"
+        )
+    return train, val, test
+
+
+def _trace_event_cache(trace_dir: Optional[Union[str, Path]]) -> Dict[str, Set[str]]:
+    directory = Path(trace_dir) if trace_dir else Path(".data/raw/scripted")
+    cache: Dict[str, Set[str]] = {}
+    if not directory.is_dir():
+        return cache
+    for trace_file in glob.glob(str(directory / "*.json")):
+        if Path(trace_file).name.startswith("manifest"):
+            continue
+        try:
+            with open(trace_file, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+            session_id = data.get("session", {}).get("sessionId")
+            if session_id:
+                cache[session_id] = {
+                    f"{session_id}:ev_{index}"
+                    for index in range(len(data.get("behaviourEvents", [])))
+                }
+        except Exception:
+            continue
+    return cache
+
+
+def _validate_provenance_fields(example: Dict[str, Any], index: int) -> None:
+    for field in PROVENANCE_REQUIRED_FIELDS:
+        if field not in example or example[field] is None:
+            raise ManifestValidationError(
+                f"Example [{index}] ({example.get('example_id', 'unknown')}) is missing "
+                f"required provenance field: '{field}'"
+            )
+        if isinstance(example[field], str) and not example[field].strip():
+            raise ManifestValidationError(
+                f"Example [{index}] has empty string for required provenance field: '{field}'"
+            )
+
+
+def _validate_split_tag(
+    example: Dict[str, Any],
+    index: int,
+    train: Set[str],
+    val: Set[str],
+    test: Set[str],
+) -> None:
+    session_id = example["session_id"]
+    split = example.get("split")
+    if split not in {"train", "val", "test"}:
+        raise ManifestValidationError(f"Example [{index}] has invalid split tag: '{split}'")
+    expected = "train" if session_id in train else "val" if session_id in val else "test"
+    if session_id in test:
+        expected = "test"
+    if split != expected:
+        raise ManifestValidationError(
+            f"Example [{index}] belongs to {expected} session '{session_id}' but has split '{split}'"
+        )
+
+
+def _validate_semantic_header(manifest: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    header = manifest.get("target_semantics")
+    if not header:
+        return None
+    if not header.get("target_vocabulary_version"):
+        raise ManifestValidationError(
+            "target_semantics.target_vocabulary_version must be non-empty"
+        )
+    if header.get("split_unit") != "session":
+        raise ManifestValidationError("target_semantics.split_unit must be 'session' (ADR-031)")
+    if not header.get("target_vocabulary"):
+        raise ManifestValidationError(
+            "target_semantics.target_vocabulary must declare the label vocabulary"
+        )
+    return header
+
+
+def _validate_semantic_example(
+    example: Dict[str, Any], index: int, header: Dict[str, Any]
+) -> None:
+    vocabulary = header["target_vocabulary"]
+    target = example.get("target_task_outcome")
+    if target not in vocabulary:
+        raise ManifestValidationError(
+            f"Example [{index}] semantic target '{target}' is not in the declared target vocabulary"
+        )
+    if example.get("target_task_outcome_id") != vocabulary.index(target):
+        raise ManifestValidationError(
+            f"Example [{index}] semantic target ID mismatch for '{target}'"
+        )
+    if example.get("target_vocabulary_version") != header["target_vocabulary_version"]:
+        raise ManifestValidationError(
+            f"Example [{index}] target_vocabulary_version does not match the manifest header"
+        )
+
+
+def _validate_intervention_label(example: Dict[str, Any], index: int) -> None:
+    intervention = example.get("target_intervention")
+    if intervention not in INTERVENTION_VOCABULARY:
+        raise ManifestValidationError(
+            f"Example [{index}] has unknown intervention: '{intervention}'"
+        )
+    if example.get("target_intervention_id") != INTERVENTION_TO_ID[intervention]:
+        raise ManifestValidationError(
+            f"Example [{index}] intervention ID mismatch: '{intervention}' mapped to "
+            f"{example.get('target_intervention_id')}"
+        )
+
+
+def _validate_source_events(
+    example: Dict[str, Any],
+    index: int,
+    session_id: str,
+    cache: Dict[str, Set[str]],
+    check_events: bool,
+) -> None:
+    source_events = example.get("source_event_ids", [])
+    if not isinstance(source_events, list):
+        raise ManifestValidationError(f"Example [{index}] source_event_ids must be a list")
+    if not source_events:
+        raise ManifestValidationError(f"Example [{index}] has empty source_event_ids list")
+    if not check_events or session_id not in cache:
+        return
+    for event_id in source_events:
+        if event_id not in cache[session_id]:
+            raise ManifestValidationError(
+                f"Example [{index}] references non-existent sourceEventId: '{event_id}' "
+                f"for session '{session_id}'"
+            )
+
+
+def _validate_example(
+    example: Dict[str, Any],
+    index: int,
+    train: Set[str],
+    val: Set[str],
+    test: Set[str],
+    semantic_header: Optional[Dict[str, Any]],
+    cache: Dict[str, Set[str]],
+    check_events: bool,
+) -> str:
+    _validate_provenance_fields(example, index)
+    _validate_split_tag(example, index, train, val, test)
+    if example.get("label_policy_version") != LABEL_POLICY_VERSION:
+        raise ManifestValidationError(
+            f"Example [{index}] label_policy_version "
+            f"'{example.get('label_policy_version')}' != '{LABEL_POLICY_VERSION}'"
+        )
+    if semantic_header:
+        _validate_semantic_example(example, index, semantic_header)
+    _validate_intervention_label(example, index)
+    _validate_source_events(example, index, example["session_id"], cache, check_events)
+    return example["session_id"]
 
 
 def validate_dataset_manifest(
@@ -489,165 +747,27 @@ def validate_dataset_manifest(
     3. Splits are strictly session-bounded and disjoint.
     4. Label policy version matches the labels and code.
     5. Feature schema and preprocessing versions match current code.
+    6. Semantic labels stay inside the declared target vocabulary.
     """
-    if isinstance(manifest_path_or_dict, (str, Path)):
-        p = Path(manifest_path_or_dict)
-        if not p.is_file():
-            raise ManifestValidationError(f"Manifest file does not exist: {p}")
-        try:
-            with open(p, "r", encoding="utf-8") as fp:
-                manifest = json.load(fp)
-        except Exception as e:
-            raise ManifestValidationError(f"Failed to parse manifest JSON from {p}: {e}")
-    elif isinstance(manifest_path_or_dict, dict):
-        manifest = manifest_path_or_dict
-    else:
-        raise ManifestValidationError(f"Expected path or dict, received: {type(manifest_path_or_dict)}")
+    manifest = _load_manifest(manifest_path_or_dict)
+    examples = _validate_header(manifest)
+    _validate_code_versions(manifest)
+    train, val, test, = _validate_splits_and_weights(manifest)
+    semantic_header = _validate_semantic_header(manifest)
+    cache = _trace_event_cache(trace_dir)
 
-    # 1. Header schema validation
-    required_headers = [
-        "manifest_schema_version",
-        "dataset_version",
-        "claim_boundary",
-        "code_versions",
-        "split_summary",
-        "class_weights",
-        "total_examples",
-        "examples",
-    ]
-    for h in required_headers:
-        if h not in manifest or manifest[h] is None:
-            raise ManifestValidationError(f"Manifest is missing required header field: '{h}'")
-
-    # 2. Code versions verification
-    cv = manifest["code_versions"]
-    if cv.get("preprocessing_version") != PREPROCESSING_VERSION:
-        raise ManifestValidationError(
-            f"Preprocessing version mismatch: manifest has '{cv.get('preprocessing_version')}', "
-            f"code requires '{PREPROCESSING_VERSION}'"
+    seen_sessions = {
+        _validate_example(
+            example, index, train, val, test, semantic_header, cache, check_events
         )
-    if cv.get("feature_schema_version") != FEATURE_SCHEMA_VERSION:
-        raise ManifestValidationError(
-            f"Feature schema version mismatch: manifest has '{cv.get('feature_schema_version')}', "
-            f"code requires '{FEATURE_SCHEMA_VERSION}'"
-        )
-    if cv.get("label_policy_version") != LABEL_POLICY_VERSION:
-        raise ManifestValidationError(
-            f"Label policy version mismatch: manifest has '{cv.get('label_policy_version')}', "
-            f"code requires '{LABEL_POLICY_VERSION}'"
-        )
-
-    # 3. Split disjointness verification
-    split_summary = manifest["split_summary"]
-    sessions_dict = split_summary.get("sessions", {})
-    train_s = set(sessions_dict.get("train", []))
-    val_s = set(sessions_dict.get("val", []))
-    test_s = set(sessions_dict.get("test", []))
-
-    if not train_s.isdisjoint(val_s):
-        raise ManifestValidationError(f"Non-disjoint splits: Train and Val overlap on {train_s & val_s}")
-    if not train_s.isdisjoint(test_s):
-        raise ManifestValidationError(f"Non-disjoint splits: Train and Test overlap on {train_s & test_s}")
-    if not val_s.isdisjoint(test_s):
-        raise ManifestValidationError(f"Non-disjoint splits: Val and Test overlap on {val_s & test_s}")
-
-    # 4. Class weights derivation provenance
-    cw = manifest.get("class_weights", {})
-    if cw.get("derived_on") != "train_partition_only":
-        raise ManifestValidationError(
-            f"Class weights provenance invalid: expected 'train_partition_only', received '{cw.get('derived_on')}'"
-        )
-
-    examples = manifest["examples"]
-    if not isinstance(examples, list) or len(examples) == 0:
-        raise ManifestValidationError("Manifest contains no examples or examples is not a list")
-
-    if len(examples) != manifest["total_examples"]:
-        raise ManifestValidationError(
-            f"Total examples mismatch: header declared {manifest['total_examples']}, found {len(examples)}"
-        )
-
-    # Pre-index source traces if trace_dir is provided and check_events is requested
-    trace_events_cache: Dict[str, Set[str]] = {}
-    if check_events:
-        td = Path(trace_dir) if trace_dir else Path(".data/raw/scripted")
-        if td.is_dir():
-            trace_files = glob.glob(str(td / "*.json"))
-            for tf in trace_files:
-                if Path(tf).name.startswith("manifest"):
-                    continue
-                try:
-                    with open(tf, "r", encoding="utf-8") as fp:
-                        t_data = json.load(fp)
-                    sid = t_data.get("session", {}).get("sessionId")
-                    b_events = t_data.get("behaviourEvents", [])
-                    if sid:
-                        trace_events_cache[sid] = {f"{sid}:ev_{i}" for i in range(len(b_events))}
-                except Exception:
-                    pass
-
-    # 5. Validate every single example for all 9 provenance fields & trace integrity
-    seen_sessions = set()
-    for idx, ex in enumerate(examples):
-        for field in PROVENANCE_REQUIRED_FIELDS:
-            if field not in ex or ex[field] is None:
-                raise ManifestValidationError(
-                    f"Example [{idx}] ({ex.get('example_id', 'unknown')}) is missing required provenance field: '{field}'"
-                )
-            if isinstance(ex[field], str) and not ex[field].strip():
-                raise ManifestValidationError(
-                    f"Example [{idx}] has empty string for required provenance field: '{field}'"
-                )
-
-        sid = ex["session_id"]
-        seen_sessions.add(sid)
-        split = ex.get("split")
-        if split not in {"train", "val", "test"}:
-            raise ManifestValidationError(f"Example [{idx}] has invalid split tag: '{split}'")
-
-        # Verify example split matches session partition
-        if sid in train_s and split != "train":
-            raise ManifestValidationError(f"Example [{idx}] belongs to train session '{sid}' but has split '{split}'")
-        elif sid in val_s and split != "val":
-            raise ManifestValidationError(f"Example [{idx}] belongs to val session '{sid}' but has split '{split}'")
-        elif sid in test_s and split != "test":
-            raise ManifestValidationError(f"Example [{idx}] belongs to test session '{sid}' but has split '{split}'")
-
-        # Verify label policy consistency
-        if ex.get("label_policy_version") != LABEL_POLICY_VERSION:
-            raise ManifestValidationError(
-                f"Example [{idx}] label_policy_version '{ex.get('label_policy_version')}' != '{LABEL_POLICY_VERSION}'"
-            )
-
-        target_int = ex.get("target_intervention")
-        if target_int not in INTERVENTION_VOCABULARY:
-            raise ManifestValidationError(f"Example [{idx}] has unknown intervention: '{target_int}'")
-        if ex.get("target_intervention_id") != INTERVENTION_TO_ID[target_int]:
-            raise ManifestValidationError(
-                f"Example [{idx}] intervention ID mismatch: '{target_int}' mapped to {ex.get('target_intervention_id')}"
-            )
-
-        # Source event verification against trace cache
-        source_evs = ex.get("source_event_ids", [])
-        if not isinstance(source_evs, list):
-            raise ManifestValidationError(f"Example [{idx}] source_event_ids must be a list")
-        if len(source_evs) == 0:
-            raise ManifestValidationError(f"Example [{idx}] has empty source_event_ids list")
-
-        if check_events and sid in trace_events_cache:
-            valid_ev_ids = trace_events_cache[sid]
-            for ev_id in source_evs:
-                if ev_id not in valid_ev_ids:
-                    raise ManifestValidationError(
-                        f"Example [{idx}] references non-existent sourceEventId: '{ev_id}' for session '{sid}'"
-                    )
-
+        for index, example in enumerate(examples)
+    }
     return {
         "valid": True,
         "dataset_version": manifest["dataset_version"],
         "total_examples": len(examples),
         "total_sessions": len(seen_sessions),
-        "split_summary": split_summary,
+        "split_summary": manifest["split_summary"],
     }
 
 

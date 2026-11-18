@@ -94,6 +94,36 @@ class TargetGenerationConfig:
 
 
 @dataclass
+class SemanticTargetConfig:
+    """Approved semantic target vocabulary (Task 40.2, ADR-030).
+
+    The runtime records 15 semantic IDs; only these 14 are model targets. `inspect_help` is
+    recorded evidence and is excluded from labels.
+    """
+    target_vocabulary_version: str = "testbed-semantic-target/1.0.0"
+    recorded_vocabulary_id: str = "testbed-semantic"
+    recorded_vocabulary_version: str = "testbed-semantic/1.0.0"
+    target_vocabulary: Dict[int, str] = field(default_factory=lambda: {
+        0: "navigate_overview",
+        1: "navigate_analytics",
+        2: "navigate_reports",
+        3: "select_report",
+        4: "open_filter_section",
+        5: "close_filter_section",
+        6: "select_region",
+        7: "select_date_range",
+        8: "select_category",
+        9: "apply_filter",
+        10: "reset_filter",
+        11: "export_report",
+        12: "backtrack",
+        13: "NO_OUTCOME"
+    })
+    recorded_only_outcomes: List[str] = field(default_factory=lambda: ["inspect_help"])
+    lookahead_horizon_ms: Tuple[int, int] = (500, 1500)
+
+
+@dataclass
 class TrainingConfig:
     batch_size: int = 64
     epochs: int = 5
@@ -141,6 +171,7 @@ class PipelineConfig:
     data: DataConfig = field(default_factory=DataConfig)
     preprocessing: PreprocessingConfig = field(default_factory=PreprocessingConfig)
     target_generation: TargetGenerationConfig = field(default_factory=TargetGenerationConfig)
+    semantic_targets: SemanticTargetConfig = field(default_factory=SemanticTargetConfig)
     training: TrainingConfig = field(default_factory=TrainingConfig)
     ablation: AblationConfig = field(default_factory=AblationConfig)
     export: ExportConfig = field(default_factory=ExportConfig)
@@ -324,11 +355,37 @@ def load_config(
         })
     )
 
+    semantic_dict = raw_dict.get("semantic_targets", {})
+    semantic_defaults = SemanticTargetConfig()
+    semantic_cfg = SemanticTargetConfig(
+        target_vocabulary_version=semantic_dict.get(
+            "target_vocabulary_version", semantic_defaults.target_vocabulary_version
+        ),
+        recorded_vocabulary_id=semantic_dict.get(
+            "recorded_vocabulary_id", semantic_defaults.recorded_vocabulary_id
+        ),
+        recorded_vocabulary_version=semantic_dict.get(
+            "recorded_vocabulary_version", semantic_defaults.recorded_vocabulary_version
+        ),
+        target_vocabulary={
+            int(k): str(v) for k, v in semantic_dict.get(
+                "target_vocabulary", semantic_defaults.target_vocabulary
+            ).items()
+        },
+        recorded_only_outcomes=list(semantic_dict.get(
+            "recorded_only_outcomes", semantic_defaults.recorded_only_outcomes
+        )),
+        lookahead_horizon_ms=tuple(semantic_dict.get(
+            "lookahead_horizon_ms", semantic_defaults.lookahead_horizon_ms
+        ))
+    )
+
     pipeline_cfg = PipelineConfig(
         mode=selected_mode,
         data=data_cfg,
         preprocessing=prep_cfg,
         target_generation=target_cfg,
+        semantic_targets=semantic_cfg,
         training=train_cfg,
         ablation=AblationConfig(),
         export=export_cfg

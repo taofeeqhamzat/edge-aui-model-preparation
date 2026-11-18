@@ -47,23 +47,31 @@ class TestDatasetManifest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.proj_root = Path(__file__).resolve().parent.parent
-        cls.manifest_path = cls.proj_root / ".data" / "processed" / "v1.0.0" / "manifest.json"
         cls.trace_dir = cls.proj_root / ".data" / "raw" / "scripted"
+        # Build the manifest from the traces that are actually present. The previous version
+        # reused a cached .data artifact recorded from an older 18-session capture set, so the
+        # validator was checking a manifest against traces that no longer exist.
+        cls._tmpdir = tempfile.TemporaryDirectory()
+        cls.manifest_path = Path(cls._tmpdir.name) / "manifest.json"
 
-        if not cls.manifest_path.is_file():
-            # If not built yet, build it using pipeline functions
-            rows, _ = build_target_dataset_from_traces(trace_dir=cls.trace_dir)
-            split_rows, summary = split_target_dataset(rows, random_seed=42)
-            create_dataset_manifest(
-                rows=split_rows,
-                split_summary=summary,
-                trace_dir=cls.trace_dir,
-                output_path=cls.manifest_path,
-                dataset_version="v1.0.0",
-            )
+        rows, _ = build_target_dataset_from_traces(trace_dir=cls.trace_dir)
+        cls.expected_examples = len(rows)
+        cls.expected_sessions = len({r["session_id"] for r in rows})
+        split_rows, summary = split_target_dataset(rows, random_seed=42)
+        create_dataset_manifest(
+            rows=split_rows,
+            split_summary=summary,
+            trace_dir=cls.trace_dir,
+            output_path=cls.manifest_path,
+            dataset_version="test-manifest",
+        )
 
         with open(cls.manifest_path, "r", encoding="utf-8") as f:
             cls.canonical_manifest = json.load(f)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmpdir.cleanup()
 
     def test_valid_manifest_passes_validation(self):
         """Assert that the production manifest passes all validation checks cleanly."""
@@ -73,9 +81,9 @@ class TestDatasetManifest(unittest.TestCase):
             check_events=True,
         )
         self.assertTrue(res["valid"])
-        self.assertEqual(res["total_examples"], 289)
-        self.assertEqual(res["total_sessions"], 18)
-        self.assertEqual(res["dataset_version"], "v1.0.0")
+        self.assertEqual(res["total_examples"], self.expected_examples)
+        self.assertEqual(res["total_sessions"], self.expected_sessions)
+        self.assertEqual(res["dataset_version"], "test-manifest")
 
     def test_validator_fails_missing_header_field(self):
         """Assert validator fails when a required top-level header is missing."""

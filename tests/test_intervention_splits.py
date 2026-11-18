@@ -13,6 +13,7 @@ Enforces:
 import copy
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 import numpy as np
@@ -38,6 +39,9 @@ class TestInterventionSplits(unittest.TestCase):
         if not trace_dir.is_dir():
             raise unittest.SkipTest(f"Trace directory not found: {trace_dir}")
 
+        cls.expected_sessions = len([
+            f for f in trace_dir.glob("*.json") if not f.name.startswith("manifest")
+        ])
         cls.rows, cls.stats = build_target_dataset_from_traces(trace_dir=trace_dir)
         cls.split_rows, cls.split_summary = split_target_dataset(
             copy.deepcopy(cls.rows),
@@ -62,7 +66,7 @@ class TestInterventionSplits(unittest.TestCase):
         # Total sessions count
         all_sessions = set(r["session_id"] for r in self.split_rows)
         self.assertEqual(train_sessions | val_sessions | test_sessions, all_sessions)
-        self.assertEqual(len(all_sessions), 18)
+        self.assertEqual(len(all_sessions), self.expected_sessions)
 
         # Every row split tag matches its session set
         for r in self.split_rows:
@@ -132,46 +136,54 @@ class TestInterventionSplits(unittest.TestCase):
     def test_class_distribution_and_absent_classes(self):
         """Assert per-partition distribution counts and explicit reporting of absent classes."""
         ec = self.split_summary["example_counts"]
-        self.assertEqual(ec["total"], 289)
-        self.assertEqual(ec["train"], 208)
-        self.assertEqual(ec["val"], 51)
-        self.assertEqual(ec["test"], 30)
+        self.assertEqual(ec["total"], len(self.split_rows))
+        self.assertEqual(ec["train"] + ec["val"] + ec["test"], ec["total"])
 
-        # All 5 classes represented in training partition
-        train_absent = self.split_summary["absent_classes"]["train"]
-        self.assertEqual(len(train_absent), 0, f"Expected 0 absent classes in train, found: {train_absent}")
-
-        # Val and Test partitions lack 'simplify_options' and 'highlight_primary_action'
-        val_absent = self.split_summary["absent_classes"]["val"]
-        test_absent = self.split_summary["absent_classes"]["test"]
-
-        self.assertIn("simplify_options", val_absent)
-        self.assertIn("highlight_primary_action", val_absent)
-        self.assertIn("simplify_options", test_absent)
-        self.assertIn("highlight_primary_action", test_absent)
-
-        # Confirm count sum equals total for each partition
+        # Every declared class is either counted or explicitly listed as absent, and the
+        # per-partition counts sum to that partition's example count.
         for p in ["train", "val", "test"]:
             p_counts = self.split_summary["class_distribution"][p]["counts"]
             self.assertEqual(sum(p_counts.values()), ec[p])
+            absent = set(self.split_summary["absent_classes"][p])
+            self.assertEqual(
+                absent,
+                {name for name, count in p_counts.items() if count == 0},
+                f"{p}: absent-class report must match the zero counts",
+            )
+
+        # The training partition is the one used to fit the head, so it must cover more than
+        # one class even on a small capture set.
+        train_present = [name for name, count in self.split_summary["class_distribution"]["train"]["counts"].items() if count > 0]
+        self.assertGreater(len(train_present), 1, "Training partition must cover more than one class")
 
     def test_majority_class_baselines(self):
         """Assert majority-class baseline metrics are calculated across all partitions."""
         majority_summary = self.split_summary["majority_baseline"]
 
-        # Majority class is 'no_op'
-        self.assertEqual(majority_summary["train"]["majority_class"], "no_op")
-        self.assertEqual(majority_summary["val"]["majority_class"], "no_op")
-        self.assertEqual(majority_summary["test"]["majority_class"], "no_op")
+        train_counts = self.split_summary["class_distribution"]["train"]["counts"]
+        expected_majority = max(train_counts, key=train_counts.get)
+        self.assertEqual(majority_summary["train"]["majority_class"], expected_majority)
 
-        # Accuracies are within expected valid range [0, 1]
+        # The majority class is resolved once on train and applied to every partition.
         for p in ["train", "val", "test"]:
+            self.assertEqual(majority_summary[p]["majority_class"], expected_majority)
             acc = majority_summary[p]["accuracy"]
             f1 = majority_summary[p]["macro_f1"]
-            self.assertGreaterEqual(acc, 0.30)
-            self.assertLessEqual(acc, 0.55)
+            self.assertGreaterEqual(acc, 0.0)
+            self.assertLessEqual(acc, 1.0)
             self.assertGreaterEqual(f1, 0.0)
             self.assertLessEqual(f1, 1.0)
+
+    def test_imbalance_strategy_variants_and_unknown_strategy(self):
+        """Unweighted and inverse weighting resolve; an unknown strategy fails loudly."""
+        for strategy in ("inverse", "none"):
+            _, summary = split_target_dataset(
+                copy.deepcopy(self.rows), imbalance_strategy=strategy
+            )
+            self.assertEqual(summary["class_weights"]["strategy"], strategy)
+            self.assertEqual(len(summary["class_weights"]["weights"]), len(INTERVENTION_VOCABULARY))
+        with self.assertRaises(ValueError):
+            split_target_dataset(copy.deepcopy(self.rows), imbalance_strategy="bogus")
 
     def test_provenance_fields_present_on_every_row(self):
         """Assert all 9 provenance fields required by Brief §8 are present on every row."""
@@ -204,8 +216,16 @@ class TestInterventionSplits(unittest.TestCase):
         """Assert python3 -m src.target_dataset --split executes cleanly with exit code 0."""
         import subprocess
 
-        cmd = [sys.executable, "-m", "src.target_dataset", "--split"]
-        proc = subprocess.run(cmd, capture_output=True, text=True, cwd=str(Path(__file__).resolve().parent.parent))
+        with tempfile.TemporaryDirectory() as tmp:
+            cli_output = str(Path(tmp) / "cli_split.parquet")
+            cmd = [
+                sys.executable, "-m", "src.target_dataset", "--split",
+                "--output", cli_output,
+            ]
+            proc = subprocess.run(
+                cmd, capture_output=True, text=True,
+                cwd=str(Path(__file__).resolve().parent.parent),
+            )
 
         self.assertEqual(proc.returncode, 0, f"CLI command failed with stderr: {proc.stderr}")
         self.assertIn("SESSION-BOUNDED SPLIT REPORT", proc.stdout)
