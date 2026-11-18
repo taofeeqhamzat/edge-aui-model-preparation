@@ -57,6 +57,30 @@ Missing telemetry modalities (e.g. scroll on fixed viewports) strictly clear the
   `4: no_op`
 - **Methodological Claim:** Labels generated via `intervention_label_policy.py` are scripted outputs from a deterministic rule policy conditioned on observable outcome events and UIContext, and are explicitly bounded under ADR-013.
 
+### 3.1 Semantic Target Vocabulary (Task 40.2, ADR-030)
+
+- **Owning Files:** `src/config.yaml` (`semantic_targets`), `src/semantic_targets.py`
+- **Target vocabulary version:** `testbed-semantic-target/1.0.0`
+- **Dimension:** 14 discrete logits, ordered:
+  `0 navigate_overview`, `1 navigate_analytics`, `2 navigate_reports`, `3 select_report`,
+  `4 open_filter_section`, `5 close_filter_section`, `6 select_region`, `7 select_date_range`,
+  `8 select_category`, `9 apply_filter`, `10 reset_filter`, `11 export_report`, `12 backtrack`,
+  `13 NO_OUTCOME`.
+- **Recorded vs target:** the runtime records 15 semantic IDs. The extra ID, `inspect_help`, is
+  evidence produced by the tooltip exclusion rule (it keeps `tooltip-region` from becoming
+  `select_region`) and is **not** a target. Dataset assembly excludes those windows and counts
+  them (`excluded_recorded_only`); it never relabels them `NO_OUTCOME`.
+- **Label sources:** each example records `target_label_source` as one of
+  `trace_semantic_outcome` (the 1.4.0 runtime derivation, preferred), `trace_no_outcome` (the trace
+  declares the semantic contract but the record carries no ID), `lookahead_no_outcome` (no semantic
+  act inside the horizon), or `re_derived` / `re_derived_no_match` (legacy capture re-derived with
+  the TypeScript-mirrored rules).
+- **Causality:** labels come only from records whose source event lies inside
+  `(anchor_end + 500 ms, anchor_end + 1500 ms]` by default. An anchor whose horizon closes past the
+  session end is excluded as incomplete rather than labelled `NO_OUTCOME`.
+- **How it is set:** change `semantic_targets.target_vocabulary` in `src/config.yaml`; the Python
+  constants are loaded from that section. Do not hardcode a different class count in the head.
+
 ---
 
 ## 4. Provenance-Versioned Dataset Manifest Schema (Task 11.2)
@@ -154,6 +178,32 @@ Every example in `manifest.json` (and every row in `target_intervention_dataset.
 | `feature_schema_version` | `string` | No | Feature schema code version (`1.1.0`) |
 | `target_generation_version` | `string` | No | Target policy code version (`1.0.0`) |
 
+### 5.1 Semantic Target Dataset v2 (`v2.0.0-semantic`, Task 40.2)
+
+- **File Path:** `.data/processed/v2.0.0-semantic/target_semantic_dataset.parquet`
+- **Builder:** `python3 -m src.target_dataset --split --build-manifest --version v2.0.0-semantic`
+  (`--target` defaults to semantic when the version contains `semantic`), or
+  `python3 -m src.window_horizon --write-dataset` after the 40.3 experiment.
+- **Retained columns:** every column of the intervention dataset above, including
+  `target_outcome`/`target_outcome_id` and `target_intervention`/`target_intervention_id`, for
+  backward comparison and ablation.
+- **Added columns:**
+
+| Column | Type | Nullable | Description |
+|---|---|---|---|
+| `target_task_outcome` | `string` | No (semantic rows) | Future semantic outcome ID |
+| `target_task_outcome_id` | `int64` | No (semantic rows) | Class ID $[0..13]$ in the target vocabulary |
+| `target_vocabulary_version` | `string` | No (semantic rows) | `testbed-semantic-target/1.0.0` |
+| `recorded_vocabulary_version` | `string` | Yes | Runtime vocabulary version present in the trace |
+| `task_definition_version` | `string` | Yes | `TD-v2` for the approved task set |
+| `target_label_source` | `string` | No (semantic rows) | Derivation provenance (see 3.1) |
+| `target_event_timestamp` | `float64` | Yes | Source-event time of the labelled act |
+| `lead_time_ms` | `float64` | Yes | `target_event_timestamp - anchor_window_end` |
+
+- **Exclusions are counted, not hidden:** `excluded_incomplete_lookahead`,
+  `excluded_recorded_only` (`inspect_help`), `excluded_missing_context` and `label_sources` are
+  recorded in the parquet metadata and the manifest's `target_semantics` block.
+
 ---
 
 ## 6. Manifest Validation Invariants
@@ -166,6 +216,11 @@ The validator `validate_dataset_manifest` in `src/data_manager.py` executes 6 st
 4. **Leak-Free Class Weights:** `class_weights.derived_on` must strictly equal `"train_partition_only"`.
 5. **Full Example Provenance:** Every example must retain non-empty values for all 9 Brief §8 provenance fields.
 6. **Source Event Traceability:** Every `sourceEventId` in every example must resolve to a valid event in the corresponding source trace file (`0 <= ev_idx < len(trace.behaviourEvents)`).
+7. **Semantic Target Consistency (when `target_semantics` is present):** the header declares a
+   target vocabulary and version, `split_unit` is `session` (ADR-031), every example's
+   `target_task_outcome` is in that vocabulary, its ID matches the declared order, and its
+   `target_vocabulary_version` matches the header. A recorded-only ID such as `inspect_help` is
+   rejected as a label.
 
 ---
 
@@ -174,10 +229,33 @@ The validator `validate_dataset_manifest` in `src/data_manager.py` executes 6 st
 ### Supported ExperimentTrace versions
 
 - **Owning File:** `src/trace_ingestion.py`
-- **Current version:** `1.3.0` (`EXPERIMENT_TRACE_SCHEMA_VERSION`).
-- **Supported legacy versions:** `1.2.0`, `1.1.0` (`SUPPORTED_EXPERIMENT_TRACE_SCHEMA_VERSIONS`).
-- **Per-version key contract:** `TRACE_KEY_ALLOWLIST` and `BEHAVIOUR_EVENT_KEY_ALLOWLIST` declare the exact permitted top-level and `behaviourEvents[]` keys. `1.3.0` additionally permits the `policyDecisions` array and the `ariaExpanded` event key. The new `metadata`/`session` fields (`clock`, `provenance`, `applicationVersion`, `modelVersion`, `executionProvider`, `policyVersion`, `mining`, `evictions`, `integrityWarnings`, `participantId`) are read but are not themselves key-restricted, matching the pre-existing behaviour.
+- **Current version:** `1.4.0` (`EXPERIMENT_TRACE_SCHEMA_VERSION`).
+- **Supported legacy versions:** `1.3.0`, `1.2.0`, `1.1.0` (`SUPPORTED_EXPERIMENT_TRACE_SCHEMA_VERSIONS`).
+- **Per-version key contract:** four version-keyed allow-lists now validate the trace body:
+  `TRACE_KEY_ALLOWLIST` (top level), `BEHAVIOUR_EVENT_KEY_ALLOWLIST` (`behaviourEvents[]`),
+  `OUTCOME_RECORD_KEY_ALLOWLIST` (`outcomes[]`) and `TASK_EVENT_KEY_ALLOWLIST` (`taskEvents[]`).
+  Every record field outside its version's set is rejected with a named error. `1.4.0` adds the
+  semantic outcome keys (`taskOutcome`, its vocabulary version, source and rule id) to outcome
+  records and `taskDefinitionVersion`/`reason` to task events. `1.4.0` task-event reasons are
+  restricted to `reset`, `replaced`, `condition_change`, `interrupted`, `timeout`, `wrong_action`,
+  `state_mismatch`, `step_exhausted`.
 - **No silent skips:** `ingest_trace_directory` reports every file whose `schemaVersion` falls outside the allow-list and then raises `UnsupportedTraceSchemaError`, which carries a machine-readable `.skipped` list of `{path, schema_version, reason}` entries. Passing `strict=False` (CLI: `--allow-unsupported-trace-versions`) ingests the supported subset only, and still reports what it skipped on stderr.
+
+### Canonical semantic and task columns (Task 40.1)
+
+`CANONICAL_EVENT_SCHEMA` (`src/data.py`) also carries the semantic outcome of the row's window and
+a causal task snapshot:
+
+- `task_outcome`, `task_outcome_vocabulary_version`, `task_outcome_source`,
+  `task_outcome_rule_id` come from the `outcomes[]` record whose `windowId` matches the row's
+  `window_id`. Legacy rows leave them null; nothing is invented.
+- `semantic_outcome_vocabulary_version` and `task_definition_version` come from `metadata`.
+- `task_status` and `task_failure_reason` are the last task-event status/reason at or before the
+  row's timestamp for that task. This preserves `task_fail` (for example `timeout`) causally: a row
+  never sees a future failure, and a reason is cleared when the task returns to `In Progress`.
+
+Prediction/provenance fields are **deliberately deferred**: `predictions[]` and `policyDecisions[]`
+are allow-listed but are not threaded into the canonical Parquet yet.
 
 ### Canonical event `provenance` column
 
@@ -189,5 +267,27 @@ The validator `validate_dataset_manifest` in `src/data_manager.py` executes 6 st
 
 ### Configuration caveat (effective values are hard-coded defaults)
 
-`src/config.yaml` is not loaded on the trace-ingestion path: `load_config` is imported by `src/microtensor_store.py` and `src/target_dataset.py` but never called, and `src/trace_ingestion.py` never reads config at all. The effective values there are the hard-coded module defaults — including the bare `ts_ms // 250` window-correlation fallback in `parse_experiment_trace`. Do not treat `src/config.yaml` as authoritative until that wiring is fixed.
+`src/config.yaml` is not loaded on the trace-ingestion path: `load_config` is imported by `src/microtensor_store.py` and `src/target_dataset.py` but never called, and `src/trace_ingestion.py` never reads config at all. The effective values there are the hard-coded module defaults — including the bare `ts_ms // 250` window-correlation fallback in `parse_experiment_trace`. Do not treat `src/config.yaml` as authoritative on that path until the wiring is fixed. The semantic target vocabulary *is* read from `src/config.yaml` (`semantic_targets` section).
+
+---
+
+## 8. Window/Horizon Experiment (Task 40.3)
+
+- **Owning File:** `src/window_horizon.py`
+- **Report:** [`docs/experiments/window-horizon/window-horizon-report.md`](experiments/window-horizon/window-horizon-report.md)
+- **Configurations (pre-declared, no search):** A `8x500 ms / [500,1500]`; B `8x500 ms /
+  [1000,2000]`; C `4x500 ms / [500,1500]`; D `12x500 ms / [500,1500]`. Stride is 250 ms.
+- **Selection criteria (declared before running):** maximise training classes with at least
+  `MIN_CLASS_SUPPORT = 5` examples; minimise the largest training class share; minimise median lead
+  time; then the declared A–D order.
+- **Metrics per configuration:** training per-outcome frequency, time between semantic acts,
+  lead-time percentiles, per-class precision/recall/F1 and macro-F1 of the **majority-class
+  baseline** (no head is trained), class imbalance, false early predictions (must be 0), incomplete
+  windows and excluded recorded-only windows, plus per-partition task coverage.
+- **Claim boundary:** scripted captures only. The selection is a label-feasibility result and must
+  be re-confirmed on participant data before the semantic head is trained; no semantic-model
+  performance is claimed.
+- **Selected dataset:** `python3 -m src.window_horizon --write-dataset` writes
+  `.data/processed/v2.0.0-semantic/` and records the chosen configuration in
+  `window_horizon_selection.json` and the manifest's `target_semantics`.
 

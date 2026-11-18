@@ -35,3 +35,13 @@ instructions*.md
 
 # Scripted-run browser downloads (export button artefacts); traces are the record, not these files
 .data/raw/scripted/.downloads/
+
+# uv cache (local, not project data)
+.uv-cache/
+
+# Local QA/coverage artifacts (code-qna tools write these)
+.coverage
+coverage.xml
+coverage.json
+.metrics/
+target/
