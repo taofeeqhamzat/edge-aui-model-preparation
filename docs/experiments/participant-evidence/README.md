@@ -72,6 +72,9 @@ collection. No semantic head was trained.
 ## 4. Limitations
 
 - 35 sessions, no approved participant identifier, session-bounded splits only.
+- The whole export is declared participant by researcher authority. Provenance was not inferred
+  from behaviour, timing or device; if a pre-correction scripted run was present in the export,
+  it is inside the participant set by that declaration, not by an algorithmic judgement.
 - `NO_OUTCOME` is about 80% of training examples; the target head will need class weighting and
   a coverage report, and 40.4 must not pretend the configuration is settled.
 - Four traces are excluded; their labels remain unanalysed.
