@@ -1,0 +1,2494 @@
+{
+  "candidates": [
+    {
+      "length": 2,
+      "occurrences": 56,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "OPEN_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 27,
+      "tasks": [
+        "TD1",
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 22,
+      "pattern": [
+        "SELECT_REGION",
+        "CLOSE_FILTERS",
+        "OPEN_FILTERS"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 21,
+      "tasks": [
+        "TD1",
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 44,
+      "pattern": [
+        "SELECT_REGION",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 21,
+      "tasks": [
+        "TD1",
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 34,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "SELECT_REGION"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 20,
+      "tasks": [
+        "TD1",
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 29,
+      "pattern": [
+        "OPEN_FILTERS",
+        "SELECT_REGION"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 19,
+      "tasks": [
+        "TD1",
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 19,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "SELECT_REGION",
+        "CLOSE_FILTERS",
+        "OPEN_FILTERS"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 18,
+      "tasks": [
+        "TD1",
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 19,
+      "pattern": [
+        "SELECT_REGION",
+        "CLOSE_FILTERS",
+        "OPEN_FILTERS",
+        "SELECT_REGION"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 18,
+      "tasks": [
+        "TD1",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 19,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "OPEN_FILTERS",
+        "SELECT_REGION"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 18,
+      "tasks": [
+        "TD1",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 23,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "SELECT_REGION",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 18,
+      "tasks": [
+        "TD1",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 18,
+      "pattern": [
+        "SELECT_DATE",
+        "CLOSE_FILTERS",
+        "OPEN_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 17,
+      "tasks": [
+        "TD1",
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 22,
+      "pattern": [
+        "SELECT_DATE",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 17,
+      "tasks": [
+        "TD1",
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 16,
+      "pattern": [
+        "SELECT_CATEGORY",
+        "CLOSE_FILTERS",
+        "OPEN_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 16,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 20,
+      "pattern": [
+        "OPEN_FILTERS",
+        "SELECT_DATE"
+      ],
+      "risk_flags": [],
+      "support_sessions": 16,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 25,
+      "pattern": [
+        "SELECT_CATEGORY",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 16,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 15,
+      "pattern": [
+        "SELECT_CATEGORY",
+        "CLOSE_FILTERS",
+        "OPEN_FILTERS",
+        "SELECT_CATEGORY"
+      ],
+      "risk_flags": [],
+      "support_sessions": 15,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 16,
+      "pattern": [
+        "SELECT_DATE",
+        "CLOSE_FILTERS",
+        "OPEN_FILTERS",
+        "SELECT_DATE"
+      ],
+      "risk_flags": [],
+      "support_sessions": 15,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 15,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "OPEN_FILTERS",
+        "SELECT_CATEGORY"
+      ],
+      "risk_flags": [],
+      "support_sessions": 15,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 17,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "OPEN_FILTERS",
+        "SELECT_DATE"
+      ],
+      "risk_flags": [],
+      "support_sessions": 15,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 16,
+      "pattern": [
+        "OPEN_FILTERS",
+        "SELECT_REGION",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 15,
+      "tasks": [
+        "TD1",
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 25,
+      "pattern": [
+        "APPLY_FILTER",
+        "RESET_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 15,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 19,
+      "pattern": [
+        "OPEN_FILTERS",
+        "SELECT_CATEGORY"
+      ],
+      "risk_flags": [],
+      "support_sessions": 15,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 14,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "OPEN_FILTERS",
+        "SELECT_REGION",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 14,
+      "tasks": [
+        "TD1",
+        "TD3"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 14,
+      "pattern": [
+        "OPEN_FILTERS",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 12,
+      "tasks": [
+        "TD1",
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 13,
+      "pattern": [
+        "SELECT_REGION",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 12,
+      "tasks": [
+        "TD1",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 11,
+      "pattern": [
+        "EXPORT_REPORT",
+        "APPLY_FILTER",
+        "EXPORT_REPORT"
+      ],
+      "risk_flags": [],
+      "support_sessions": 11,
+      "tasks": [
+        "TD1"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 18,
+      "pattern": [
+        "APPLY_FILTER",
+        "EXPORT_REPORT"
+      ],
+      "risk_flags": [],
+      "support_sessions": 11,
+      "tasks": [
+        "TD1"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 11,
+      "pattern": [
+        "EXPORT_REPORT",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [],
+      "support_sessions": 11,
+      "tasks": [
+        "TD1"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 12,
+      "pattern": [
+        "HOVER_KPI",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 11,
+      "tasks": [
+        "TD1",
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 11,
+      "pattern": [
+        "OPEN_FILTERS",
+        "SELECT_DATE",
+        "OPEN_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 10,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 12,
+      "pattern": [
+        "SELECT_REGION",
+        "CLOSE_FILTERS",
+        "SELECT_REGION"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 10,
+      "tasks": [
+        "TD1",
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 11,
+      "pattern": [
+        "APPLY_FILTER",
+        "SELECT_REGION"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 10,
+      "tasks": [
+        "TD1",
+        "TD2"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 12,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [],
+      "support_sessions": 10,
+      "tasks": [
+        "TD1",
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 10,
+      "pattern": [
+        "NAV_ANALYTICS",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 10,
+      "tasks": [
+        "TD1"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 12,
+      "pattern": [
+        "SELECT_DATE",
+        "OPEN_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 10,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 9,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "OPEN_FILTERS",
+        "SELECT_DATE",
+        "OPEN_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 9,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 9,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "SELECT_DATE",
+        "CLOSE_FILTERS",
+        "OPEN_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 9,
+      "tasks": [
+        "TD1",
+        "TD2"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 9,
+      "pattern": [
+        "OPEN_FILTERS",
+        "SELECT_REGION",
+        "CLOSE_FILTERS",
+        "SELECT_REGION"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 9,
+      "tasks": [
+        "TD1",
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 9,
+      "pattern": [
+        "APPLY_FILTER",
+        "SELECT_DATE",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [],
+      "support_sessions": 9,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 9,
+      "pattern": [
+        "APPLY_FILTER",
+        "SELECT_REGION",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 9,
+      "tasks": [
+        "TD1"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 9,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "SELECT_DATE",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 9,
+      "tasks": [
+        "TD1",
+        "TD2"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 9,
+      "pattern": [
+        "SELECT_CATEGORY",
+        "CLOSE_FILTERS",
+        "SELECT_CATEGORY"
+      ],
+      "risk_flags": [],
+      "support_sessions": 9,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 9,
+      "pattern": [
+        "APPLY_FILTER",
+        "SELECT_DATE"
+      ],
+      "risk_flags": [],
+      "support_sessions": 9,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 16,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "SELECT_CATEGORY"
+      ],
+      "risk_flags": [],
+      "support_sessions": 9,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 18,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "SELECT_DATE"
+      ],
+      "risk_flags": [],
+      "support_sessions": 9,
+      "tasks": [
+        "TD1",
+        "TD2"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 9,
+      "pattern": [
+        "SELECT_DATE",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [],
+      "support_sessions": 9,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 8,
+      "pattern": [
+        "APPLY_FILTER",
+        "SELECT_DATE",
+        "APPLY_FILTER",
+        "RESET_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 8,
+      "tasks": [
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 8,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "OPEN_FILTERS",
+        "SELECT_CATEGORY",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 8,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 8,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "SELECT_CATEGORY",
+        "SELECT_DATE",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 8,
+      "tasks": [
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 8,
+      "pattern": [
+        "OPEN_FILTERS",
+        "SELECT_CATEGORY",
+        "CLOSE_FILTERS",
+        "SELECT_CATEGORY"
+      ],
+      "risk_flags": [],
+      "support_sessions": 8,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 8,
+      "pattern": [
+        "SELECT_CATEGORY",
+        "SELECT_DATE",
+        "CLOSE_FILTERS",
+        "OPEN_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 8,
+      "tasks": [
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 10,
+      "pattern": [
+        "APPLY_FILTER",
+        "RESET_FILTERS",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [],
+      "support_sessions": 8,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 8,
+      "pattern": [
+        "APPLY_FILTER",
+        "SELECT_CATEGORY",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [],
+      "support_sessions": 8,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 8,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "APPLY_FILTER",
+        "SELECT_REGION"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 8,
+      "tasks": [
+        "TD1",
+        "TD2"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 8,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "SELECT_CATEGORY",
+        "SELECT_DATE"
+      ],
+      "risk_flags": [],
+      "support_sessions": 8,
+      "tasks": [
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 8,
+      "pattern": [
+        "OPEN_FILTERS",
+        "SELECT_CATEGORY",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 8,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 8,
+      "pattern": [
+        "SELECT_CATEGORY",
+        "SELECT_DATE",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 8,
+      "tasks": [
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 8,
+      "pattern": [
+        "SELECT_DATE",
+        "APPLY_FILTER",
+        "RESET_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 8,
+      "tasks": [
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 8,
+      "pattern": [
+        "SELECT_REGION",
+        "CLOSE_FILTERS",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 8,
+      "tasks": [
+        "TD1",
+        "TD3"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 8,
+      "pattern": [
+        "APPLY_FILTER",
+        "SELECT_CATEGORY"
+      ],
+      "risk_flags": [],
+      "support_sessions": 8,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 8,
+      "pattern": [
+        "NAV_REPORTS",
+        "OPEN_REPORT"
+      ],
+      "risk_flags": [],
+      "support_sessions": 8,
+      "tasks": [
+        "TD4"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 8,
+      "pattern": [
+        "OPEN_FILTERS",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [],
+      "support_sessions": 8,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 10,
+      "pattern": [
+        "RESET_FILTERS",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [],
+      "support_sessions": 8,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 15,
+      "pattern": [
+        "SELECT_CATEGORY",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [],
+      "support_sessions": 8,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 9,
+      "pattern": [
+        "SELECT_CATEGORY",
+        "OPEN_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 8,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 8,
+      "pattern": [
+        "SELECT_CATEGORY",
+        "SELECT_DATE"
+      ],
+      "risk_flags": [],
+      "support_sessions": 8,
+      "tasks": [
+        "TD3"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 15,
+      "pattern": [
+        "SELECT_REGION",
+        "OPEN_FILTERS"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 8,
+      "tasks": [
+        "TD1",
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 7,
+      "pattern": [
+        "APPLY_FILTER",
+        "EXPORT_REPORT",
+        "APPLY_FILTER",
+        "EXPORT_REPORT"
+      ],
+      "risk_flags": [],
+      "support_sessions": 7,
+      "tasks": [
+        "TD1"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 8,
+      "pattern": [
+        "APPLY_FILTER",
+        "RESET_FILTERS",
+        "APPLY_FILTER",
+        "RESET_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 7,
+      "tasks": [
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 7,
+      "pattern": [
+        "APPLY_FILTER",
+        "SELECT_CATEGORY",
+        "APPLY_FILTER",
+        "RESET_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 7,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 7,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "APPLY_FILTER",
+        "SELECT_REGION",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 7,
+      "tasks": [
+        "TD1"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 7,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "SELECT_DATE",
+        "SELECT_CATEGORY",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 7,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 7,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "SELECT_REGION",
+        "SELECT_CATEGORY",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 7,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 7,
+      "pattern": [
+        "HOVER_KPI",
+        "CLOSE_FILTERS",
+        "SELECT_REGION",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 7,
+      "tasks": [
+        "TD1",
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 7,
+      "pattern": [
+        "NAV_ANALYTICS",
+        "CLOSE_FILTERS",
+        "SELECT_REGION",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 7,
+      "tasks": [
+        "TD1"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 7,
+      "pattern": [
+        "OPEN_REPORT",
+        "HOVER_KPI",
+        "NAV_REPORTS",
+        "OPEN_REPORT"
+      ],
+      "risk_flags": [],
+      "support_sessions": 7,
+      "tasks": [
+        "TD4"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 7,
+      "pattern": [
+        "SELECT_CATEGORY",
+        "APPLY_FILTER",
+        "SELECT_CATEGORY",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [],
+      "support_sessions": 7,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 7,
+      "pattern": [
+        "SELECT_DATE",
+        "APPLY_FILTER",
+        "RESET_FILTERS",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [],
+      "support_sessions": 7,
+      "tasks": [
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 7,
+      "pattern": [
+        "SELECT_DATE",
+        "SELECT_CATEGORY",
+        "CLOSE_FILTERS",
+        "OPEN_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 7,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 7,
+      "pattern": [
+        "SELECT_REGION",
+        "APPLY_FILTER",
+        "EXPORT_REPORT",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 7,
+      "tasks": [
+        "TD1"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 7,
+      "pattern": [
+        "SELECT_REGION",
+        "CLOSE_FILTERS",
+        "SELECT_REGION",
+        "SELECT_CATEGORY"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 7,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 7,
+      "pattern": [
+        "SELECT_REGION",
+        "SELECT_CATEGORY",
+        "CLOSE_FILTERS",
+        "OPEN_FILTERS"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 7,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 7,
+      "pattern": [
+        "APPLY_FILTER",
+        "EXPORT_REPORT",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [],
+      "support_sessions": 7,
+      "tasks": [
+        "TD1"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 7,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "SELECT_DATE",
+        "SELECT_CATEGORY"
+      ],
+      "risk_flags": [],
+      "support_sessions": 7,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 7,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "SELECT_REGION",
+        "SELECT_CATEGORY"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 7,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 7,
+      "pattern": [
+        "HOVER_KPI",
+        "CLOSE_FILTERS",
+        "SELECT_REGION"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 7,
+      "tasks": [
+        "TD1",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 7,
+      "pattern": [
+        "HOVER_KPI",
+        "NAV_REPORTS",
+        "OPEN_REPORT"
+      ],
+      "risk_flags": [],
+      "support_sessions": 7,
+      "tasks": [
+        "TD4"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 7,
+      "pattern": [
+        "NAV_ANALYTICS",
+        "CLOSE_FILTERS",
+        "SELECT_REGION"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 7,
+      "tasks": [
+        "TD1"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 7,
+      "pattern": [
+        "NAV_REPORTS",
+        "OPEN_REPORT",
+        "EXPORT_REPORT"
+      ],
+      "risk_flags": [],
+      "support_sessions": 7,
+      "tasks": [
+        "TD4"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 7,
+      "pattern": [
+        "OPEN_REPORT",
+        "HOVER_KPI",
+        "NAV_REPORTS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 7,
+      "tasks": [
+        "TD4"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 8,
+      "pattern": [
+        "RESET_FILTERS",
+        "APPLY_FILTER",
+        "RESET_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 7,
+      "tasks": [
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 7,
+      "pattern": [
+        "SELECT_CATEGORY",
+        "APPLY_FILTER",
+        "RESET_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 7,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 7,
+      "pattern": [
+        "SELECT_CATEGORY",
+        "APPLY_FILTER",
+        "SELECT_CATEGORY"
+      ],
+      "risk_flags": [],
+      "support_sessions": 7,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 7,
+      "pattern": [
+        "SELECT_DATE",
+        "SELECT_CATEGORY",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 7,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 7,
+      "pattern": [
+        "SELECT_REGION",
+        "APPLY_FILTER",
+        "EXPORT_REPORT"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 7,
+      "tasks": [
+        "TD1"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 7,
+      "pattern": [
+        "SELECT_REGION",
+        "OPEN_FILTERS",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 7,
+      "tasks": [
+        "TD1",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 7,
+      "pattern": [
+        "SELECT_REGION",
+        "SELECT_CATEGORY",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 7,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 7,
+      "pattern": [
+        "HOVER_KPI",
+        "NAV_REPORTS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 7,
+      "tasks": [
+        "TD4"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 7,
+      "pattern": [
+        "OPEN_REPORT",
+        "EXPORT_REPORT"
+      ],
+      "risk_flags": [],
+      "support_sessions": 7,
+      "tasks": [
+        "TD4"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 8,
+      "pattern": [
+        "OPEN_REPORT",
+        "HOVER_KPI"
+      ],
+      "risk_flags": [],
+      "support_sessions": 7,
+      "tasks": [
+        "TD4"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 7,
+      "pattern": [
+        "SELECT_DATE",
+        "SELECT_CATEGORY"
+      ],
+      "risk_flags": [],
+      "support_sessions": 7,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 7,
+      "pattern": [
+        "SELECT_REGION",
+        "SELECT_CATEGORY"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 7,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 6,
+      "pattern": [
+        "HOVER_KPI",
+        "NAV_REPORTS",
+        "OPEN_REPORT",
+        "EXPORT_REPORT"
+      ],
+      "risk_flags": [],
+      "support_sessions": 6,
+      "tasks": [
+        "TD4"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 6,
+      "pattern": [
+        "OPEN_FILTERS",
+        "APPLY_FILTER",
+        "SELECT_DATE",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [],
+      "support_sessions": 6,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 6,
+      "pattern": [
+        "OPEN_FILTERS",
+        "SELECT_CATEGORY",
+        "APPLY_FILTER",
+        "SELECT_CATEGORY"
+      ],
+      "risk_flags": [],
+      "support_sessions": 6,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 6,
+      "pattern": [
+        "OPEN_FILTERS",
+        "SELECT_REGION",
+        "OPEN_FILTERS",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 6,
+      "tasks": [
+        "TD1",
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 6,
+      "pattern": [
+        "SELECT_REGION",
+        "CLOSE_FILTERS",
+        "APPLY_FILTER",
+        "SELECT_REGION"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 6,
+      "tasks": [
+        "TD1"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 6,
+      "pattern": [
+        "OPEN_FILTERS",
+        "APPLY_FILTER",
+        "SELECT_DATE"
+      ],
+      "risk_flags": [],
+      "support_sessions": 6,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 6,
+      "pattern": [
+        "OPEN_FILTERS",
+        "SELECT_CATEGORY",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [],
+      "support_sessions": 6,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 8,
+      "pattern": [
+        "OPEN_FILTERS",
+        "SELECT_REGION",
+        "OPEN_FILTERS"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 6,
+      "tasks": [
+        "TD1",
+        "TD3"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 6,
+      "pattern": [
+        "SELECT_DATE",
+        "SELECT_REGION"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 6,
+      "tasks": [
+        "TD1",
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 5,
+      "pattern": [
+        "APPLY_FILTER",
+        "SELECT_REGION",
+        "APPLY_FILTER",
+        "EXPORT_REPORT"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 5,
+      "tasks": [
+        "TD1"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 5,
+      "pattern": [
+        "OPEN_FILTERS",
+        "CLOSE_FILTERS",
+        "SELECT_CATEGORY",
+        "SELECT_DATE"
+      ],
+      "risk_flags": [],
+      "support_sessions": 5,
+      "tasks": [
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 5,
+      "pattern": [
+        "OPEN_FILTERS",
+        "SELECT_REGION",
+        "CLOSE_FILTERS",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 5,
+      "tasks": [
+        "TD1"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 5,
+      "pattern": [
+        "SELECT_REGION",
+        "OPEN_FILTERS",
+        "CLOSE_FILTERS",
+        "SELECT_CATEGORY"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 5,
+      "tasks": [
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 5,
+      "pattern": [
+        "OPEN_FILTERS",
+        "CLOSE_FILTERS",
+        "SELECT_CATEGORY"
+      ],
+      "risk_flags": [],
+      "support_sessions": 5,
+      "tasks": [
+        "TD3"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 7,
+      "pattern": [
+        "APPLY_FILTER",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 5,
+      "tasks": [
+        "TD1",
+        "TD2",
+        "TD3",
+        "TD4"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 5,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "HOVER_KPI"
+      ],
+      "risk_flags": [],
+      "support_sessions": 5,
+      "tasks": [
+        "TD1",
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 4,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "OPEN_FILTERS",
+        "SELECT_CATEGORY",
+        "OPEN_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 4,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 4,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "OPEN_FILTERS",
+        "SELECT_DATE",
+        "SELECT_REGION"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 4,
+      "tasks": [
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 4,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "SELECT_CATEGORY",
+        "OPEN_FILTERS",
+        "SELECT_REGION"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 4,
+      "tasks": [
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 4,
+      "pattern": [
+        "HOVER_KPI",
+        "CLOSE_FILTERS",
+        "SELECT_DATE",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 4,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 4,
+      "pattern": [
+        "OPEN_FILTERS",
+        "SELECT_CATEGORY",
+        "OPEN_FILTERS",
+        "SELECT_CATEGORY"
+      ],
+      "risk_flags": [],
+      "support_sessions": 4,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 4,
+      "pattern": [
+        "OPEN_FILTERS",
+        "SELECT_DATE",
+        "CLOSE_FILTERS",
+        "SELECT_DATE"
+      ],
+      "risk_flags": [],
+      "support_sessions": 4,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 4,
+      "pattern": [
+        "OPEN_FILTERS",
+        "SELECT_DATE",
+        "OPEN_FILTERS",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [],
+      "support_sessions": 4,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 4,
+      "pattern": [
+        "OPEN_FILTERS",
+        "SELECT_DATE",
+        "OPEN_FILTERS",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 4,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 4,
+      "pattern": [
+        "OPEN_FILTERS",
+        "SELECT_DATE",
+        "SELECT_REGION",
+        "OPEN_FILTERS"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 4,
+      "tasks": [
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 4,
+      "pattern": [
+        "SELECT_CATEGORY",
+        "CLOSE_FILTERS",
+        "SELECT_CATEGORY",
+        "OPEN_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 4,
+      "tasks": [
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 4,
+      "pattern": [
+        "SELECT_CATEGORY",
+        "OPEN_FILTERS",
+        "SELECT_REGION",
+        "OPEN_FILTERS"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 4,
+      "tasks": [
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 4,
+      "pattern": [
+        "SELECT_DATE",
+        "OPEN_FILTERS",
+        "APPLY_FILTER",
+        "SELECT_DATE"
+      ],
+      "risk_flags": [],
+      "support_sessions": 4,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 4,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "APPLY_FILTER",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 4,
+      "tasks": [
+        "TD1",
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 4,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "SELECT_CATEGORY",
+        "OPEN_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 4,
+      "tasks": [
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 4,
+      "pattern": [
+        "HOVER_KPI",
+        "CLOSE_FILTERS",
+        "SELECT_DATE"
+      ],
+      "risk_flags": [],
+      "support_sessions": 4,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 4,
+      "pattern": [
+        "OPEN_FILTERS",
+        "CLOSE_FILTERS",
+        "SELECT_DATE"
+      ],
+      "risk_flags": [],
+      "support_sessions": 4,
+      "tasks": [
+        "TD1",
+        "TD2"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 5,
+      "pattern": [
+        "OPEN_FILTERS",
+        "SELECT_CATEGORY",
+        "OPEN_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 4,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 4,
+      "pattern": [
+        "OPEN_FILTERS",
+        "SELECT_DATE",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 4,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 4,
+      "pattern": [
+        "OPEN_FILTERS",
+        "SELECT_DATE",
+        "SELECT_REGION"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 4,
+      "tasks": [
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 4,
+      "pattern": [
+        "OPEN_FILTERS",
+        "SELECT_REGION",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 4,
+      "tasks": [
+        "TD1",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 4,
+      "pattern": [
+        "SELECT_CATEGORY",
+        "OPEN_FILTERS",
+        "SELECT_CATEGORY"
+      ],
+      "risk_flags": [],
+      "support_sessions": 4,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 4,
+      "pattern": [
+        "SELECT_CATEGORY",
+        "OPEN_FILTERS",
+        "SELECT_REGION"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 4,
+      "tasks": [
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 4,
+      "pattern": [
+        "SELECT_DATE",
+        "CLOSE_FILTERS",
+        "SELECT_DATE"
+      ],
+      "risk_flags": [],
+      "support_sessions": 4,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 4,
+      "pattern": [
+        "SELECT_DATE",
+        "OPEN_FILTERS",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [],
+      "support_sessions": 4,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 4,
+      "pattern": [
+        "SELECT_DATE",
+        "OPEN_FILTERS",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 4,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 4,
+      "pattern": [
+        "SELECT_DATE",
+        "SELECT_REGION",
+        "OPEN_FILTERS"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 4,
+      "tasks": [
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 3,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "OPEN_FILTERS",
+        "SELECT_CATEGORY",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [],
+      "support_sessions": 3,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 3,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "OPEN_FILTERS",
+        "SELECT_DATE",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 3,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 3,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "OPEN_FILTERS",
+        "SELECT_REGION",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 3,
+      "tasks": [
+        "TD1"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 3,
+      "pattern": [
+        "OPEN_FILTERS",
+        "CLOSE_FILTERS",
+        "SELECT_DATE",
+        "SELECT_CATEGORY"
+      ],
+      "risk_flags": [],
+      "support_sessions": 3,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 3,
+      "pattern": [
+        "OPEN_FILTERS",
+        "SELECT_DATE",
+        "OPEN_FILTERS",
+        "SELECT_REGION"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 3,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 3,
+      "pattern": [
+        "SELECT_CATEGORY",
+        "CLOSE_FILTERS",
+        "SELECT_CATEGORY",
+        "SELECT_DATE"
+      ],
+      "risk_flags": [],
+      "support_sessions": 3,
+      "tasks": [
+        "TD3"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 3,
+      "pattern": [
+        "SELECT_CATEGORY",
+        "OPEN_FILTERS",
+        "SELECT_CATEGORY",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [],
+      "support_sessions": 3,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 3,
+      "pattern": [
+        "SELECT_DATE",
+        "CLOSE_FILTERS",
+        "SELECT_DATE",
+        "SELECT_CATEGORY"
+      ],
+      "risk_flags": [],
+      "support_sessions": 3,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 3,
+      "pattern": [
+        "SELECT_DATE",
+        "OPEN_FILTERS",
+        "CLOSE_FILTERS",
+        "SELECT_DATE"
+      ],
+      "risk_flags": [],
+      "support_sessions": 3,
+      "tasks": [
+        "TD2"
+      ]
+    },
+    {
+      "length": 4,
+      "occurrences": 3,
+      "pattern": [
+        "SELECT_REGION",
+        "CLOSE_FILTERS",
+        "SELECT_REGION",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 3,
+      "tasks": [
+        "TD1",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 3,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "HOVER_KPI",
+        "CLOSE_FILTERS"
+      ],
+      "risk_flags": [],
+      "support_sessions": 3,
+      "tasks": [
+        "TD1",
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 3,
+      "pattern": [
+        "CLOSE_FILTERS",
+        "OPEN_FILTERS",
+        "HOVER_KPI"
+      ],
+      "risk_flags": [],
+      "support_sessions": 3,
+      "tasks": [
+        "TD1",
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 3,
+      "pattern": [
+        "SELECT_DATE",
+        "OPEN_FILTERS",
+        "SELECT_REGION"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 3,
+      "tasks": [
+        "TD2",
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 3,
+      "pattern": [
+        "SELECT_REGION",
+        "OPEN_FILTERS",
+        "APPLY_FILTER"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 3,
+      "tasks": [
+        "TD3"
+      ]
+    },
+    {
+      "length": 3,
+      "occurrences": 3,
+      "pattern": [
+        "SELECT_REGION",
+        "OPEN_FILTERS",
+        "SELECT_REGION"
+      ],
+      "risk_flags": [
+        "may include tooltip-region misclassification until the macro rule is fixed"
+      ],
+      "support_sessions": 3,
+      "tasks": [
+        "TD1",
+        "TD3"
+      ]
+    },
+    {
+      "length": 2,
+      "occurrences": 4,
+      "pattern": [
+        "OPEN_FILTERS",
+        "HOVER_KPI"
+      ],
+      "risk_flags": [],
+      "support_sessions": 3,
+      "tasks": [
+        "TD1",
+        "TD2",
+        "TD3"
+      ]
+    }
+  ],
+  "evidence_schema_version": "1.0.0",
+  "evidence_scope": "Participant-derived macro sequences. Candidate patterns are evidence for Task 50.2, not the gate configuration; 50.1 PrefixSpan correctness remains open and the selection is provisional until more participant traces are collected.",
+  "excluded_symbols": [
+    "BACKTRACK",
+    "IDLE_DWELL",
+    "RAPID_SCROLL",
+    "SELECT_SEGMENT",
+    "TABLE_PAGE_NEXT",
+    "TABLE_PAGE_PREV",
+    "TABLE_ROW_SELECT",
+    "TABLE_SORT"
+  ],
+  "max_pattern_length": 4,
+  "min_support": 3,
+  "provenance": "participant",
+  "session_count": 35,
+  "sessions_without_macros": 0,
+  "symbol_counts": {
+    "APPLY_FILTER": 81,
+    "CLOSE_FILTERS": 144,
+    "EXPORT_REPORT": 30,
+    "HOVER_HELP": 2,
+    "HOVER_KPI": 30,
+    "NAV_ANALYTICS": 11,
+    "NAV_REPORTS": 8,
+    "OPEN_FILTERS": 94,
+    "OPEN_REPORT": 16,
+    "RESET_FILTERS": 25,
+    "SELECT_CATEGORY": 58,
+    "SELECT_DATE": 57,
+    "SELECT_REGION": 83
+  },
+  "task_counts": {
+    "TD1": 11,
+    "TD2": 8,
+    "TD3": 8,
+    "TD4": 8
+  }
+}
