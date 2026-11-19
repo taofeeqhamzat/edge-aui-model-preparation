@@ -196,6 +196,7 @@ Every example in `manifest.json` (and every row in `target_intervention_dataset.
 | `target_vocabulary_version` | `string` | No (semantic rows) | `testbed-semantic-target/1.0.0` |
 | `recorded_vocabulary_version` | `string` | Yes | Runtime vocabulary version present in the trace |
 | `task_definition_version` | `string` | Yes | `TD-v2` for the approved task set |
+| `provenance` | `string` | No | `scripted` or `participant`; never mixed in one dataset |
 | `target_label_source` | `string` | No (semantic rows) | Derivation provenance (see 3.1) |
 | `target_event_timestamp` | `float64` | Yes | Source-event time of the labelled act |
 | `lead_time_ms` | `float64` | Yes | `target_event_timestamp - anchor_window_end` |
@@ -288,6 +289,17 @@ are allow-listed but are not threaded into the canonical Parquet yet.
   be re-confirmed on participant data before the semantic head is trained; no semantic-model
   performance is claimed.
 - **Selected dataset:** `python3 -m src.window_horizon --write-dataset` writes
-  `.data/processed/v2.0.0-semantic/` and records the chosen configuration in
+  `.data/processed/<version>/` and records the chosen configuration in
   `window_horizon_selection.json` and the manifest's `target_semantics`.
+- **Provenance scoping:** every run detects the declared provenance of its input and refuses a
+  mixed directory; `--require-provenance participant` refuses scripted evidence. The report's
+  evidence scope and caveats change with the scope.
+- **Scripted result:** `.data/processed/v2.0.0-semantic/` (selected C) is pipeline evidence
+  only. **Participant result:** `.data/processed/v2.1.0-participant/` (selected D,
+  **provisional**) is the evidence for the Phase 4B configuration. The participant export,
+  local provenance retrofit and verification gate are recorded in
+  [`docs/experiments/participant-evidence/README.md`](experiments/participant-evidence/README.md).
+- **Participant-derived pattern candidates:** `python3 -m src.participant_patterns` writes
+  [`docs/experiments/participant-patterns/`](experiments/participant-patterns/participant-pattern-candidates.md)
+  for Task 50.2. It reads participant traces only and refuses scripted input.
 

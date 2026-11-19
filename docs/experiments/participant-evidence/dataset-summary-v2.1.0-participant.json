@@ -1,0 +1,132 @@
+{
+  "absent_classes": {
+    "test": [
+      "navigate_overview",
+      "close_filter_section",
+      "backtrack"
+    ],
+    "train": [
+      "navigate_overview",
+      "backtrack"
+    ],
+    "val": [
+      "navigate_overview",
+      "close_filter_section",
+      "select_date_range",
+      "select_category",
+      "reset_filter",
+      "backtrack"
+    ]
+  },
+  "class_weights": {
+    "derived_on": "train_partition_only",
+    "max_min_ratio": 119.23530174152033,
+    "smoothing_alpha": 10.0,
+    "strategy": "smoothed",
+    "weights": {
+      "NO_OUTCOME": 0.0927831381559372,
+      "apply_filter": 2.686734676361084,
+      "backtrack": 0.0,
+      "close_filter_section": 9.898496627807617,
+      "export_report": 7.522857189178467,
+      "navigate_analytics": 5.699134349822998,
+      "navigate_overview": 0.0,
+      "navigate_reports": 8.548701286315918,
+      "open_filter_section": 1.1681455373764038,
+      "reset_filter": 11.06302547454834,
+      "select_category": 3.2994987964630127,
+      "select_date_range": 2.442486047744751,
+      "select_region": 2.648893356323242,
+      "select_report": 5.53151273727417
+    }
+  },
+  "content_hash": "4b250d8135cb",
+  "dataset_version": "v2.1.0-participant",
+  "example_counts": {
+    "test": 793,
+    "total": 3603,
+    "train": 2493,
+    "val": 317
+  },
+  "excluded_incomplete_lookahead": 193,
+  "excluded_recorded_only": 0,
+  "label_sources": {
+    "lookahead_no_outcome": 2941,
+    "trace_semantic_outcome": 662
+  },
+  "lookahead_horizon_ms": [
+    500.0,
+    1500.0
+  ],
+  "provenance": [
+    "participant"
+  ],
+  "provenance_counts": {
+    "participant": 3603
+  },
+  "recorded_vocabulary_version": "testbed-semantic/1.0.0",
+  "selection": {
+    "dataset_version": "v2.1.0-participant",
+    "history_windows": 12,
+    "lookahead_ms": [
+      500,
+      1500
+    ],
+    "provenance": "participant",
+    "provisional": true,
+    "selection": {
+      "config": {
+        "history_windows": 12,
+        "id": "D",
+        "label": "12x500 ms, [500, 1500] ms",
+        "lookahead_ms": [
+          500,
+          1500
+        ],
+        "stride_ms": 250
+      },
+      "criteria": [
+        "maximise training classes with >= 5 examples",
+        "minimise the largest single-class share in training",
+        "minimise median lead time (earlier warning)",
+        "declared A, B, C, D order"
+      ],
+      "order": 3,
+      "provisional": true,
+      "ranking": [
+        "D",
+        "B",
+        "A",
+        "C"
+      ],
+      "rationale": "Configuration D was selected by the pre-declared criteria: 12 target classes have at least 5 training examples (highest), the largest training class holds 80.9% of examples, and the median lead time is 1026.2 ms. This selection is provisional: it is participant-derived engineering evidence with a small session count and must be re-confirmed after further collection before the semantic head training run."
+    }
+  },
+  "session_counts": {
+    "test": 6,
+    "total": 35,
+    "train": 24,
+    "val": 5
+  },
+  "split_unit": "session",
+  "target_vocabulary_version": "testbed-semantic-target/1.0.0",
+  "task_coverage": {
+    "test": {
+      "TD1": 259,
+      "TD2": 51,
+      "TD3": 406,
+      "TD4": 77
+    },
+    "train": {
+      "TD1": 443,
+      "TD2": 848,
+      "TD3": 857,
+      "TD4": 345
+    },
+    "val": {
+      "TD1": 140,
+      "TD4": 177
+    }
+  },
+  "total_examples": 3603
+}

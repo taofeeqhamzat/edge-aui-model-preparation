@@ -1,0 +1,289 @@
+{
+  "counts": {
+    "excluded": 4,
+    "total": 39,
+    "verified": 35
+  },
+  "evidence_schema_version": "1.0.0",
+  "prepared_at": "2026-11-19T10:02:24.813022+00:00",
+  "provenance": "participant",
+  "sessions": [
+    {
+      "detail": "verified",
+      "session_id": "0dd991e6-7c4a-46e4-9262-36862f37ebe8",
+      "source_file": "experiment-trace-0dd991e6-7c4a-46e4-9262-36862f37ebe8.json",
+      "status": "verified",
+      "task_id": "TD4"
+    },
+    {
+      "detail": "verified",
+      "session_id": "16bce93b-f673-418a-8552-5a6f189b0c6e",
+      "source_file": "experiment-trace-16bce93b-f673-418a-8552-5a6f189b0c6e.json",
+      "status": "verified",
+      "task_id": "TD2"
+    },
+    {
+      "detail": "verified",
+      "session_id": "1ce634a8-0a63-4449-b959-134737b96fe8",
+      "source_file": "experiment-trace-1ce634a8-0a63-4449-b959-134737b96fe8.json",
+      "status": "verified",
+      "task_id": "TD3"
+    },
+    {
+      "detail": "verified",
+      "session_id": "1f7ce681-5da0-4ce3-b2d0-df979c298c93",
+      "source_file": "experiment-trace-1f7ce681-5da0-4ce3-b2d0-df979c298c93.json",
+      "status": "verified",
+      "task_id": "TD4"
+    },
+    {
+      "detail": "verified",
+      "session_id": "238e8e37-1e10-463b-b62a-f6b0ea74ad89",
+      "source_file": "experiment-trace-238e8e37-1e10-463b-b62a-f6b0ea74ad89.json",
+      "status": "verified",
+      "task_id": "TD1"
+    },
+    {
+      "detail": "verified",
+      "session_id": "2ccfeee6-b515-43b6-a4dd-57a32cb6975e",
+      "source_file": "experiment-trace-2ccfeee6-b515-43b6-a4dd-57a32cb6975e.json",
+      "status": "verified",
+      "task_id": "TD3"
+    },
+    {
+      "detail": "verified",
+      "session_id": "37ff6d3f-bd6b-406c-9fed-3cb51ecc64d4",
+      "source_file": "experiment-trace-37ff6d3f-bd6b-406c-9fed-3cb51ecc64d4.json",
+      "status": "verified",
+      "task_id": "TD3"
+    },
+    {
+      "detail": "verified",
+      "session_id": "43a1f20c-e25c-4081-87a5-f496cee89bd1",
+      "source_file": "experiment-trace-43a1f20c-e25c-4081-87a5-f496cee89bd1.json",
+      "status": "verified",
+      "task_id": "TD2"
+    },
+    {
+      "detail": "[\u2717 FAIL] prediction_window_attribution \u2014 [\u2713 PASS] episode_prediction_attribution",
+      "session_id": "44583aa5-22e3-4c80-8201-cf2016e48d06",
+      "source_file": "experiment-trace-44583aa5-22e3-4c80-8201-cf2016e48d06.json",
+      "status": "excluded",
+      "task_id": "TD1"
+    },
+    {
+      "detail": "verified",
+      "session_id": "44cae4dd-d7b9-4817-9e72-0e841ecc1c03",
+      "source_file": "experiment-trace-44cae4dd-d7b9-4817-9e72-0e841ecc1c03.json",
+      "status": "verified",
+      "task_id": "TD1"
+    },
+    {
+      "detail": "verified",
+      "session_id": "4e73a1a7-b1bf-4367-9598-3088b69312ed",
+      "source_file": "experiment-trace-4e73a1a7-b1bf-4367-9598-3088b69312ed.json",
+      "status": "verified",
+      "task_id": "TD2"
+    },
+    {
+      "detail": "verified",
+      "session_id": "51dd2990-947c-4475-ab5a-13934584c620",
+      "source_file": "experiment-trace-51dd2990-947c-4475-ab5a-13934584c620.json",
+      "status": "verified",
+      "task_id": "TD4"
+    },
+    {
+      "detail": "verified",
+      "session_id": "53f85746-42c1-42e8-ada7-fe0fc6ea55b0",
+      "source_file": "experiment-trace-53f85746-42c1-42e8-ada7-fe0fc6ea55b0.json",
+      "status": "verified",
+      "task_id": "TD3"
+    },
+    {
+      "detail": "verified",
+      "session_id": "598b196f-7799-4f73-a269-0f2f2d170a00",
+      "source_file": "experiment-trace-598b196f-7799-4f73-a269-0f2f2d170a00.json",
+      "status": "verified",
+      "task_id": "TD3"
+    },
+    {
+      "detail": "verified",
+      "session_id": "5b5d8c12-fe9c-4af0-ac45-429c45ee1e72",
+      "source_file": "experiment-trace-5b5d8c12-fe9c-4af0-ac45-429c45ee1e72.json",
+      "status": "verified",
+      "task_id": "TD4"
+    },
+    {
+      "detail": "verified",
+      "session_id": "5dc8bc69-5932-4411-9dfb-66f7aced3b12",
+      "source_file": "experiment-trace-5dc8bc69-5932-4411-9dfb-66f7aced3b12.json",
+      "status": "verified",
+      "task_id": "TD4"
+    },
+    {
+      "detail": "[\u2717 FAIL] structural_validity \u2014 [\u2713 PASS] schema_version",
+      "session_id": "647a305d-1050-4abb-b3e3-9fb0f7758d5e",
+      "source_file": "experiment-trace-647a305d-1050-4abb-b3e3-9fb0f7758d5e.json",
+      "status": "excluded",
+      "task_id": "TD2"
+    },
+    {
+      "detail": "verified",
+      "session_id": "6a800dc3-b59e-45d1-bd89-90f7cf9862b2",
+      "source_file": "experiment-trace-6a800dc3-b59e-45d1-bd89-90f7cf9862b2.json",
+      "status": "verified",
+      "task_id": "TD1"
+    },
+    {
+      "detail": "verified",
+      "session_id": "6e4ff82b-38e1-4128-b3ff-72ea020a5edd",
+      "source_file": "experiment-trace-6e4ff82b-38e1-4128-b3ff-72ea020a5edd.json",
+      "status": "verified",
+      "task_id": "TD2"
+    },
+    {
+      "detail": "verified",
+      "session_id": "759ba55b-e21a-40fe-80fa-3cb296cd2439",
+      "source_file": "experiment-trace-759ba55b-e21a-40fe-80fa-3cb296cd2439.json",
+      "status": "verified",
+      "task_id": "TD2"
+    },
+    {
+      "detail": "verified",
+      "session_id": "7cae7a33-aa7a-464b-9fbe-78793442582c",
+      "source_file": "experiment-trace-7cae7a33-aa7a-464b-9fbe-78793442582c.json",
+      "status": "verified",
+      "task_id": "TD1"
+    },
+    {
+      "detail": "verified",
+      "session_id": "7cd74d96-ea75-4647-98d4-78eeea8ca9a5",
+      "source_file": "experiment-trace-7cd74d96-ea75-4647-98d4-78eeea8ca9a5.json",
+      "status": "verified",
+      "task_id": "TD2"
+    },
+    {
+      "detail": "verified",
+      "session_id": "8085bb24-50c1-47e7-b648-a69e754721ca",
+      "source_file": "experiment-trace-8085bb24-50c1-47e7-b648-a69e754721ca.json",
+      "status": "verified",
+      "task_id": "TD1"
+    },
+    {
+      "detail": "[\u2717 FAIL] prediction_window_attribution \u2014 [\u2713 PASS] episode_prediction_attribution",
+      "session_id": "8088144a-7235-4359-a352-c61428f99758",
+      "source_file": "experiment-trace-8088144a-7235-4359-a352-c61428f99758.json",
+      "status": "excluded",
+      "task_id": "TD1"
+    },
+    {
+      "detail": "verified",
+      "session_id": "9144d44e-d68e-499f-b669-88eb424e5d02",
+      "source_file": "experiment-trace-9144d44e-d68e-499f-b669-88eb424e5d02.json",
+      "status": "verified",
+      "task_id": "TD1"
+    },
+    {
+      "detail": "verified",
+      "session_id": "91d12425-a87e-41d2-9424-3cbb8782eda6",
+      "source_file": "experiment-trace-91d12425-a87e-41d2-9424-3cbb8782eda6.json",
+      "status": "verified",
+      "task_id": "TD4"
+    },
+    {
+      "detail": "verified",
+      "session_id": "97811d32-2231-4750-8f2a-82c7a8857213",
+      "source_file": "experiment-trace-97811d32-2231-4750-8f2a-82c7a8857213.json",
+      "status": "verified",
+      "task_id": "TD1"
+    },
+    {
+      "detail": "verified",
+      "session_id": "a20a514e-124a-4b15-9ddf-c3b337d5311a",
+      "source_file": "experiment-trace-a20a514e-124a-4b15-9ddf-c3b337d5311a.json",
+      "status": "verified",
+      "task_id": "TD2"
+    },
+    {
+      "detail": "verified",
+      "session_id": "a5853660-1568-483f-b45f-e0195520fd87",
+      "source_file": "experiment-trace-a5853660-1568-483f-b45f-e0195520fd87.json",
+      "status": "verified",
+      "task_id": "TD4"
+    },
+    {
+      "detail": "verified",
+      "session_id": "ab2f91ef-717f-41fb-bf8c-c3cb4e76f004",
+      "source_file": "experiment-trace-ab2f91ef-717f-41fb-bf8c-c3cb4e76f004.json",
+      "status": "verified",
+      "task_id": "TD1"
+    },
+    {
+      "detail": "verified",
+      "session_id": "b0dd7b3d-bae9-40f2-a4f1-5844dbfdc758",
+      "source_file": "experiment-trace-b0dd7b3d-bae9-40f2-a4f1-5844dbfdc758.json",
+      "status": "verified",
+      "task_id": "TD3"
+    },
+    {
+      "detail": "verified",
+      "session_id": "c4482b5a-0652-4d8e-8fef-b774ebe75fe3",
+      "source_file": "experiment-trace-c4482b5a-0652-4d8e-8fef-b774ebe75fe3.json",
+      "status": "verified",
+      "task_id": "TD3"
+    },
+    {
+      "detail": "verified",
+      "session_id": "d78e6202-26d0-4c15-92fd-b999e5a5f652",
+      "source_file": "experiment-trace-d78e6202-26d0-4c15-92fd-b999e5a5f652.json",
+      "status": "verified",
+      "task_id": "TD2"
+    },
+    {
+      "detail": "verified",
+      "session_id": "e1ec222a-8e5b-483b-82ad-645e4cbe04de",
+      "source_file": "experiment-trace-e1ec222a-8e5b-483b-82ad-645e4cbe04de.json",
+      "status": "verified",
+      "task_id": "TD1"
+    },
+    {
+      "detail": "verified",
+      "session_id": "e2cd7e4f-34dc-4720-aa19-be2c74b455a5",
+      "source_file": "experiment-trace-e2cd7e4f-34dc-4720-aa19-be2c74b455a5.json",
+      "status": "verified",
+      "task_id": "TD4"
+    },
+    {
+      "detail": "verified",
+      "session_id": "e6312f50-41de-4b1b-bd69-9e7628b5b8dc",
+      "source_file": "experiment-trace-e6312f50-41de-4b1b-bd69-9e7628b5b8dc.json",
+      "status": "verified",
+      "task_id": "TD1"
+    },
+    {
+      "detail": "verified",
+      "session_id": "ebc6fa26-f8ed-4995-bc3e-ea19b4c927bc",
+      "source_file": "experiment-trace-ebc6fa26-f8ed-4995-bc3e-ea19b4c927bc.json",
+      "status": "verified",
+      "task_id": "TD3"
+    },
+    {
+      "detail": "[\u2717 FAIL] prediction_window_attribution \u2014 [\u2713 PASS] episode_prediction_attribution",
+      "session_id": "f9c28d98-5ed5-4c2a-b2b0-a93d3bfe4b8e",
+      "source_file": "experiment-trace-f9c28d98-5ed5-4c2a-b2b0-a93d3bfe4b8e.json",
+      "status": "excluded",
+      "task_id": "TD4"
+    },
+    {
+      "detail": "verified",
+      "session_id": "fa499628-48bd-4441-a95c-668d3d9e193d",
+      "source_file": "experiment-trace-fa499628-48bd-4441-a95c-668d3d9e193d.json",
+      "status": "verified",
+      "task_id": "TD1"
+    }
+  ],
+  "source": {
+    "directory": "/Users/user/Workspace/MivaCS/FYP/model-preparation/.data/raw/participant",
+    "file_count": 39
+  }
+}
