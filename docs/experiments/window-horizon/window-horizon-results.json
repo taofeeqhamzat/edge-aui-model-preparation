@@ -1,5 +1,5 @@
 {
-  "evidence_scope": "Scripted engineering captures only. These are pipeline and label-feasibility results, not participant evidence, and no semantic head was trained.",
+  "evidence_scope": "Scripted engineering captures only. This is a label-feasibility and majority-baseline report, not participant evidence. No semantic head was trained, so no semantic-model performance is claimed.",
   "experiments": [
     {
       "config": {
@@ -659,6 +659,7 @@
       "order": 3
     }
   ],
+  "provenance": "scripted",
   "selection": {
     "config": {
       "history_windows": 4,
@@ -684,5 +685,6 @@
       "D"
     ],
     "rationale": "Configuration C was selected by the pre-declared criteria: 4 target classes have at least 5 training examples (highest), the largest training class holds 21.8% of examples, and the median lead time is 1120.3 ms."
-  }
+  },
+  "session_count": 8
 }

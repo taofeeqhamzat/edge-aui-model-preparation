@@ -110,6 +110,7 @@ class TestSemanticDataset(unittest.TestCase):
             self.assertEqual(row["target_vocabulary_version"], TARGET_VOCABULARY_VERSION)
             self.assertEqual(row["recorded_vocabulary_version"], "testbed-semantic/1.0.0")
             self.assertEqual(row["task_definition_version"], "TD-v2")
+            self.assertIn(row["provenance"], {"scripted", "participant"})
             self.assertIn(
                 row["target_label_source"],
                 {"trace_semantic_outcome", "trace_no_outcome", "lookahead_no_outcome",

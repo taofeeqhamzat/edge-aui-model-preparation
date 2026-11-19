@@ -59,6 +59,62 @@ EXPERIMENTS: Tuple[Dict[str, Any], ...] = (
 MIN_CLASS_SUPPORT = 5
 
 
+def detect_provenance(trace_dir: Union[str, Path]) -> str:
+    """Return the single declared provenance of a trace directory; refuse a mixed set."""
+    files = sorted(
+        path for path in Path(trace_dir).glob("*.json")
+        if "manifest" not in path.name
+    )
+    if not files:
+        raise ValueError(f"No trace JSON files found in {trace_dir}")
+    values = set()
+    for path in files:
+        with open(path, "r", encoding="utf-8") as handle:
+            trace = json.load(handle)
+        value = (trace.get("session") or {}).get("provenance")
+        if value not in ("scripted", "participant"):
+            raise ValueError(
+                f"Trace '{path.name}' declares invalid provenance '{value}'; participant and "
+                f"scripted evidence cannot be pooled"
+            )
+        values.add(value)
+    if len(values) > 1:
+        raise ValueError(
+            f"Trace directory mixes provenances {sorted(values)}; participant and scripted "
+            f"evidence cannot be pooled"
+        )
+    return values.pop()
+
+
+def _session_ids(trace_dir: Union[str, Path]) -> set:
+    ids = set()
+    for path in Path(trace_dir).glob("*.json"):
+        if path.name.startswith("manifest"):
+            continue
+        with open(path, "r", encoding="utf-8") as handle:
+            trace = json.load(handle)
+        session_id = (trace.get("session") or {}).get("sessionId")
+        if session_id:
+            ids.add(str(session_id))
+    return ids
+
+
+def _evidence_scope_text(provenance: str, session_count: int) -> str:
+    if provenance == "participant":
+        return (
+            f"Participant captures ({session_count} sessions). These are participant-derived "
+            f"engineering evidence, not a completed study: participant identifiers are not "
+            f"approved (ADR-023), the splits are session-bounded (ADR-031), and the configuration "
+            f"selection is provisional until more participant traces are collected. No semantic "
+            f"head was trained, so no semantic-model performance is claimed."
+        )
+    return (
+        "Scripted engineering captures only. This is a label-feasibility and majority-baseline "
+        "report, not participant evidence. No semantic head was trained, so no semantic-model "
+        "performance is claimed."
+    )
+
+
 def _percentiles(values: List[float]) -> Dict[str, Optional[float]]:
     if not values:
         return {"median": None, "p25": None, "p75": None}
@@ -237,20 +293,38 @@ def select_config(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-def run_experiment(trace_dir: Union[str, Path], seed: int = 42) -> Dict[str, Any]:
+def run_experiment(
+    trace_dir: Union[str, Path],
+    seed: int = 42,
+    require_provenance: Optional[str] = None,
+) -> Dict[str, Any]:
     """Run every pre-declared configuration and select one."""
+    provenance = detect_provenance(trace_dir)
+    if require_provenance and provenance != require_provenance:
+        raise ValueError(
+            f"Experiment requires '{require_provenance}' traces but '{trace_dir}' declares "
+            f"'{provenance}'; refusing to label scripted evidence as participant"
+        )
     results: List[Dict[str, Any]] = []
     for order, config in enumerate(EXPERIMENTS):
         result = run_config(trace_dir, config, seed=seed)
         result["order"] = order
         results.append(result)
+    selection = select_config(results)
+    if provenance == "participant":
+        selection["provisional"] = True
+        selection["rationale"] += (
+            " This selection is provisional: it is participant-derived engineering evidence "
+            "with a small session count and must be re-confirmed after further collection "
+            "before the semantic head training run."
+        )
+    session_count = len(_session_ids(trace_dir))
     return {
         "experiments": results,
-        "selection": select_config(results),
-        "evidence_scope": (
-            "Scripted engineering captures only. These are pipeline and label-feasibility "
-            "results, not participant evidence, and no semantic head was trained."
-        ),
+        "selection": selection,
+        "provenance": provenance,
+        "session_count": session_count,
+        "evidence_scope": _evidence_scope_text(provenance, session_count),
     }
 
 
@@ -263,13 +337,13 @@ def _fmt(value: Optional[float], digits: int = 0) -> str:
 def render_markdown(report: Dict[str, Any]) -> str:
     """Render the experiment report. Deterministic: no timestamps or machine paths."""
     lines: List[str] = []
+    provenance = str(report.get("provenance", "scripted"))
     lines.append("# Window/Horizon Experiment — Semantic Target (Task 40.3)")
     lines.append("")
-    lines.append(
-        "> **Evidence scope:** scripted engineering captures only. This is a label-feasibility "
-        "and majority-baseline report, not participant evidence. No semantic head was trained, "
-        "so no semantic-model performance is claimed."
-    )
+    lines.append(f"**Evidence provenance:** `{provenance}` "
+                 f"({report.get('session_count', 'n/a')} sessions)")
+    lines.append("")
+    lines.append(f"> **Evidence scope:** {report['evidence_scope']}")
     lines.append("")
     lines.append(f"Target vocabulary: `{TARGET_VOCABULARY_VERSION}` ({len(TARGET_VOCABULARY)} IDs).")
     lines.append("Splits: session-bounded (ADR-031). Class weights: training partition only.")
@@ -305,6 +379,12 @@ def render_markdown(report: Dict[str, Any]) -> str:
                  f"({selection['config']['label']}).")
     lines.append("")
     lines.append(selection["rationale"])
+    if selection.get("provisional"):
+        lines.append("")
+        lines.append(
+            "> **Provisional:** this participant-derived selection must be re-confirmed after "
+            "further participant collection before Phase 4B fixes the head configuration."
+        )
     lines.append("")
     lines.append("## Per-outcome frequency (training partition, selected configuration)")
     lines.append("")
@@ -329,13 +409,33 @@ def render_markdown(report: Dict[str, Any]) -> str:
     lines.append("")
     lines.append("## Caveats")
     lines.append("")
-    lines.append("- The captures are scripted engineering runs; they are not participant evidence.")
-    lines.append("- The example counts are small, so per-class support is sparse and the experiment")
-    lines.append("  cannot select a production configuration on its own. The selected configuration")
-    lines.append("  must be re-confirmed on participant data before the semantic head is trained.")
-    lines.append("- Macro-F1 is the declared majority-class baseline, not a trained model's score.")
+    lines.extend(_caveats(provenance))
     lines.append("")
     return "\n".join(lines)
+
+
+def _caveats(provenance: str) -> List[str]:
+    if provenance == "participant":
+        return [
+            "- These are participant captures, not scripted engineering runs. They were",
+            "  retrofitted locally from an exported set that had been mislabelled; the",
+            "  retrofit manifest records the authority and the original declarations.",
+            "- Participant identifiers are not approved (ADR-023) and splits are",
+            "  session-bounded (ADR-031), so no participant-held-out claim is made.",
+            "- The example counts are small, so per-class support is sparse and the margin",
+            "  between the top configurations may be within sampling noise. The selection",
+            "  is provisional and must be re-confirmed after further collection.",
+        ]
+    return [
+        "- The captures are scripted engineering runs; they are not participant evidence.",
+        "- The example counts are small, so per-class support is sparse and the experiment",
+        "  cannot select a production configuration on its own. The selected configuration",
+        "  must be re-confirmed on participant data before the semantic head is trained.",
+        "- This scripted report is pipeline evidence only; its configuration selection is",
+        "  superseded by the participant re-run",
+        "  (docs/experiments/window-horizon-participant/window-horizon-report.md).",
+        "- Macro-F1 is the declared majority-class baseline, not a trained model's score.",
+    ]
 
 
 def write_report(report: Dict[str, Any], output_dir: Union[str, Path]) -> Dict[str, Path]:
@@ -354,11 +454,12 @@ def write_selected_dataset(
     output_dir: Union[str, Path],
     version: str = "v2.0.0-semantic",
     seed: int = 42,
+    require_provenance: Optional[str] = None,
 ) -> Dict[str, Path]:
     """Build the selected dataset version and its manifest, recording the configuration."""
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    report = run_experiment(trace_dir, seed=seed)
+    report = run_experiment(trace_dir, seed=seed, require_provenance=require_provenance)
     selected = report["selection"]
     config = selected["config"]
 
@@ -396,6 +497,8 @@ def write_selected_dataset(
     selection_path.write_text(
         json.dumps({
             "dataset_version": version,
+            "provenance": report.get("provenance"),
+            "provisional": bool(selected.get("provisional")),
             "selection": selected,
             "history_windows": config["history_windows"],
             "lookahead_ms": list(config["lookahead_ms"]),
@@ -418,16 +521,24 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--write-dataset", action="store_true",
                         help="Write the selected dataset version and manifest")
+    parser.add_argument(
+        "--require-provenance", default=None, choices=["scripted", "participant"],
+        help="Refuse the run unless the trace directory declares this provenance",
+    )
     parser.add_argument("--dataset-dir", type=str, default=".data/processed")
     parser.add_argument("--version", type=str, default="v2.0.0-semantic")
     args = parser.parse_args()
 
-    report = run_experiment(args.trace_dir, seed=args.seed)
+    report = run_experiment(
+        args.trace_dir, seed=args.seed, require_provenance=args.require_provenance
+    )
     paths = write_report(report, args.report_dir)
     print(f"[WindowHorizon] Report: {paths['markdown']}")
     print(f"[WindowHorizon] Results: {paths['json']}")
+    print(f"[WindowHorizon] Provenance: {report['provenance']} ({report['session_count']} sessions)")
     print(f"[WindowHorizon] Selected: {report['selection']['config']['id']} "
-          f"({report['selection']['config']['label']})")
+          f"({report['selection']['config']['label']})"
+          f"{' [provisional]' if report['selection'].get('provisional') else ''}")
 
     if args.write_dataset:
         written = write_selected_dataset(
@@ -435,6 +546,7 @@ def main() -> None:
             output_dir=args.dataset_dir,
             version=args.version,
             seed=args.seed,
+            require_provenance=args.require_provenance,
         )
         print(f"[WindowHorizon] Dataset: {written['parquet']}")
         print(f"[WindowHorizon] Manifest: {written['manifest']}")

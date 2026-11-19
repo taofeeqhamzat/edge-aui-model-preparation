@@ -415,6 +415,7 @@ def _manifest_example(row: Dict[str, Any]) -> Dict[str, Any]:
         "target_intervention_id": int(row.get("target_intervention_id", 4)),
         "label_policy_version": str(row.get("label_policy_version", LABEL_POLICY_VERSION)),
         "is_scripted_policy": bool(row.get("is_scripted_policy", True)),
+        "provenance": str(row.get("provenance", "scripted")),
     }
     if row.get("target_task_outcome"):
         example.update({
@@ -449,6 +450,8 @@ def _target_semantics_header(
         ),
         "excluded_recorded_only": int(build_stats.get("excluded_recorded_only", 0)),
         "lookahead_horizon_ms": build_stats.get("lookahead_horizon_ms"),
+        "provenance": sorted({str(row.get("provenance")) for row in semantic_rows}),
+        "provenance_counts": build_stats.get("provenance_counts", {}),
     }
 
 

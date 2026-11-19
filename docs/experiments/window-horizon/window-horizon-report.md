@@ -1,6 +1,8 @@
 # Window/Horizon Experiment — Semantic Target (Task 40.3)
 
-> **Evidence scope:** scripted engineering captures only. This is a label-feasibility and majority-baseline report, not participant evidence. No semantic head was trained, so no semantic-model performance is claimed.
+**Evidence provenance:** `scripted` (8 sessions)
+
+> **Evidence scope:** Scripted engineering captures only. This is a label-feasibility and majority-baseline report, not participant evidence. No semantic head was trained, so no semantic-model performance is claimed.
 
 Target vocabulary: `testbed-semantic-target/1.0.0` (14 IDs).
 Splits: session-bounded (ADR-031). Class weights: training partition only.
@@ -58,4 +60,7 @@ Configuration C was selected by the pre-declared criteria: 4 target classes have
 - The example counts are small, so per-class support is sparse and the experiment
   cannot select a production configuration on its own. The selected configuration
   must be re-confirmed on participant data before the semantic head is trained.
+- This scripted report is pipeline evidence only; its configuration selection is
+  superseded by the participant re-run
+  (docs/experiments/window-horizon-participant/window-horizon-report.md).
 - Macro-F1 is the declared majority-class baseline, not a trained model's score.

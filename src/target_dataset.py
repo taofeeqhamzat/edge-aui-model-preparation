@@ -136,6 +136,7 @@ if PYARROW_AVAILABLE:
         ("preprocessing_version", pa.string()),
         ("feature_schema_version", pa.string()),
         ("target_generation_version", pa.string()),
+        ("provenance", pa.string()),
         # Semantic target fields (Task 40.2). Null on intervention-only rows.
         ("target_task_outcome", pa.string()),
         ("target_task_outcome_id", pa.int64()),
@@ -304,6 +305,10 @@ def _build_summary_stats(
         "target_vocabulary_version": TARGET_VOCABULARY_VERSION,
         "recorded_vocabulary_version": RECORDED_VOCABULARY_VERSION,
         "lookahead_horizon_ms": [lookahead_min, lookahead_max],
+        "provenance_counts": {
+            value: sum(1 for row in rows if row.get("provenance") == value)
+            for value in sorted({str(row.get("provenance")) for row in rows})
+        },
         "distribution": compute_label_distribution(
             [row["target_intervention"] for row in rows]
         ),
@@ -312,10 +317,24 @@ def _build_summary_stats(
 
 def _trace_files(trace_dir: Union[str, Path]) -> List[str]:
     files = sorted(glob.glob(str(Path(trace_dir) / "*.json")))
-    files = [path for path in files if not Path(path).name.startswith("manifest")]
+    files = [path for path in files if "manifest" not in Path(path).name]
     if not files:
         raise FileNotFoundError(f"No trace JSON files found in {trace_dir}")
     return files
+
+
+def _trace_windows(trace: Dict[str, Any]) -> List[Dict[str, Any]]:
+    windows = trace.get("microTensors", [])
+    if not isinstance(windows, list):
+        return []
+    return sorted(windows, key=lambda window: window.get("windowId", 0))
+
+
+def _declared_provenance(session: Dict[str, Any], path: Path) -> str:
+    provenance = str(session.get("provenance") or "scripted").strip() or "scripted"
+    if provenance not in ("scripted", "participant"):
+        raise ValueError(f"Trace '{path.name}' declares invalid provenance '{provenance}'")
+    return provenance
 
 
 def _trace_context(trace_file: str) -> Dict[str, Any]:
@@ -326,17 +345,14 @@ def _trace_context(trace_file: str) -> Dict[str, Any]:
     session = trace.get("session", {})
     task_info = trace.get("task", {})
     metadata = trace.get("metadata", {}) if isinstance(trace.get("metadata"), dict) else {}
-    micro_tensors = trace.get("microTensors", [])
-    if isinstance(micro_tensors, list):
-        micro_tensors = sorted(micro_tensors, key=lambda window: window.get("windowId", 0))
-    else:
-        micro_tensors = []
-
+    micro_tensors = _trace_windows(trace)
     outcome_records = [
         record for record in trace.get("outcomes", []) if isinstance(record, dict)
     ]
+    provenance = _declared_provenance(session, Path(trace_file))
     return {
         "session_id": str(session.get("sessionId", Path(trace_file).stem)),
+        "provenance": provenance,
         "experiment_id": str(session.get("experimentId", "unknown")),
         "condition_id": str(session.get("conditionId", "unknown")),
         "default_task_id": str(task_info.get("currentTaskId") or session.get("taskId") or "T1"),
@@ -468,6 +484,7 @@ def _row_payload(
         "preprocessing_version": PREPROCESSING_VERSION,
         "feature_schema_version": FEATURE_SCHEMA_VERSION,
         "target_generation_version": LABEL_POLICY_VERSION,
+        "provenance": context["provenance"],
         "target_task_outcome": semantic_label,
         "target_task_outcome_id": (
             target_outcome_id(semantic_label)
@@ -856,7 +873,7 @@ def split_target_dataset(
                 "excluded_missing_context", "excluded_incomplete_lookahead",
                 "excluded_recorded_only", "label_sources",
                 "target_vocabulary_version", "recorded_vocabulary_version",
-                "lookahead_horizon_ms",
+                "lookahead_horizon_ms", "provenance_counts",
             )
         }
     return rows, summary

@@ -45,3 +45,8 @@ coverage.xml
 coverage.json
 .metrics/
 target/
+
+# Participant and exported research traces stay local; only evidence manifests are committed.
+.data/raw/participant/
+.data/raw/participant-verified/
+.data/raw/collected-*/

@@ -12,6 +12,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
@@ -19,6 +20,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 from window_horizon import (
     EXPERIMENTS,
     MIN_CLASS_SUPPORT,
+    main,
     render_markdown,
     run_experiment,
     select_config,
@@ -132,6 +134,60 @@ class TestExperimentRun(unittest.TestCase):
         self.assertIn(f"Selected configuration: {self.selection['config']['id']}", markdown)
         self.assertIn("scripted", markdown.lower())
         self.assertIn("not participant", markdown.lower())
+
+
+class TestCli(unittest.TestCase):
+    def test_cli_writes_the_report_for_the_declared_scope(self):
+        if not TRACE_DIR.is_dir():
+            self.skipTest(f"Trace directory not found: {TRACE_DIR}")
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            sys, "argv",
+            ["window_horizon", "--trace-dir", str(TRACE_DIR), "--report-dir", tmp,
+             "--require-provenance", "scripted"],
+        ):
+            main()
+            self.assertTrue((Path(tmp) / "window-horizon-report.md").is_file())
+            self.assertTrue((Path(tmp) / "window-horizon-results.json").is_file())
+
+
+class TestProvenanceScope(unittest.TestCase):
+    def test_detects_participant_scope_and_refuses_a_mixed_directory(self):
+        from window_horizon import detect_provenance
+
+        with tempfile.TemporaryDirectory() as tmp:
+            for session_id, provenance in (("s1", "participant"), ("s2", "participant")):
+                (Path(tmp) / f"experiment-trace-{session_id}.json").write_text(json.dumps({
+                    "schemaVersion": "1.4.0",
+                    "session": {"sessionId": session_id, "provenance": provenance},
+                    "metadata": {"provenance": provenance},
+                }))
+            self.assertEqual(detect_provenance(tmp), "participant")
+            (Path(tmp) / "experiment-trace-s3.json").write_text(json.dumps({
+                "schemaVersion": "1.4.0",
+                "session": {"sessionId": "s3", "provenance": "scripted"},
+                "metadata": {"provenance": "scripted"},
+            }))
+            with self.assertRaises(ValueError):
+                detect_provenance(tmp)
+
+    def test_scripted_run_is_refused_when_participant_is_required(self):
+        if not TRACE_DIR.is_dir():
+            self.skipTest(f"Trace directory not found: {TRACE_DIR}")
+        with self.assertRaises(ValueError):
+            run_experiment(TRACE_DIR, require_provenance="participant")
+
+    def test_participant_report_is_marked_provisional(self):
+        if not TRACE_DIR.is_dir():
+            self.skipTest(f"Trace directory not found: {TRACE_DIR}")
+        report = run_experiment(TRACE_DIR)
+        report["provenance"] = "participant"
+        report["session_count"] = 35
+        report["evidence_scope"] = "Participant captures (35 sessions). Participant-derived evidence."
+        report["selection"]["provisional"] = True
+        markdown = render_markdown(report)
+        self.assertIn("Participant captures", markdown)
+        self.assertIn("Provisional", markdown)
+        self.assertIn("participant", markdown.lower())
 
 
 class TestSelectedDatasetWrite(unittest.TestCase):
