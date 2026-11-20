@@ -183,8 +183,9 @@ expected; the reliability table is in the evaluation JSON and the notebook.
 | INT8 hash | `0b1f3d4fa3a03c8d…` |
 
 These are measurements of the exported graph in this environment, not claims about the
-browser path. The <500 KB combined payload, <20 MB memory and <50 ms browser-inference
-targets are not met; see ADR-008 and ADR-016. The INT8 graph is only 6% smaller than FP32
+browser path. **Browser-path latency is NOT MEASURED**; the 0.04 ms figure is ONNX Runtime CPU
+execution of the exported graph. The <500 KB combined payload, <20 MB memory and <50 ms
+browser-inference targets are not met; see ADR-008 and ADR-016. The INT8 graph is only 6% smaller than FP32
 because dynamic quantisation leaves the GRU matmuls largely untouched.
 
 Bundle v2 records the 14-ID target vocabulary, both vocabulary versions, the dataset

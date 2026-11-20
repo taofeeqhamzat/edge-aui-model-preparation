@@ -585,9 +585,10 @@ print("fp32 logits shape:", fp32_out.shape)
 print("int8 logits shape:", int8_out.shape)
 print("top-1 agreement :", float((fp32_out.argmax(1) == int8_out.argmax(1)).mean()))
 display(Markdown(
-    "Quantisation is verified as an agreement measurement. It is not a claim that the "
-    "deployed browser path meets the 50 ms / 20 MB / 500 KB targets — those targets are "
-    "unmet as documented in ADR-008/ADR-016."
+    "Quantisation is verified as an agreement measurement. Latencies above are ONNX Runtime "
+    "CPU execution of the exported graphs; **browser-path latency is NOT MEASURED**. This is "
+    "not a claim that the deployed browser path meets the 50 ms / 20 MB / 500 KB targets — "
+    "those targets are unmet as documented in ADR-008/ADR-016."
 ))
 """
 )
