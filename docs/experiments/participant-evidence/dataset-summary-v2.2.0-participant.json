@@ -1,0 +1,233 @@
+{
+  "dataset_version": "v2.2.0-participant",
+  "content_hash": "7ebb11cac86d",
+  "total_examples": 9686,
+  "source_data_type": "participant_capture",
+  "claim_boundary": "Participant-declared interaction traces. Results from this dataset may be reported as participant-derived engineering evidence: the dataset -> preparation -> training -> export -> runtime path executes end to end, and the learned head's task-outcome metrics on the declared held-out split. No participant identifier is approved (ADR-023), the split unit is the session (ADR-031), and the sample is small and sparse; no participant-held-out generalisation is claimed. Model accuracy is not evidence of usability, task performance, intervention benefit, or user experience.",
+  "split_unit": "session",
+  "session_counts": {
+    "train": 54,
+    "val": 12,
+    "test": 11,
+    "total": 77
+  },
+  "example_counts": {
+    "train": 6562,
+    "val": 1377,
+    "test": 1747,
+    "total": 9686
+  },
+  "class_distribution": {
+    "train": {
+      "total_examples": 6562,
+      "counts": {
+        "navigate_overview": 4,
+        "navigate_analytics": 55,
+        "navigate_reports": 46,
+        "select_report": 79,
+        "open_filter_section": 305,
+        "close_filter_section": 9,
+        "select_region": 128,
+        "select_date_range": 218,
+        "select_category": 93,
+        "apply_filter": 134,
+        "reset_filter": 22,
+        "export_report": 49,
+        "backtrack": 0,
+        "NO_OUTCOME": 5420
+      },
+      "percentages": {
+        "navigate_overview": 0.06095702529716549,
+        "navigate_analytics": 0.8381590978360255,
+        "navigate_reports": 0.7010057909174032,
+        "select_report": 1.2039012496190187,
+        "open_filter_section": 4.647973178908869,
+        "close_filter_section": 0.13715330691862238,
+        "select_region": 1.9506248095092957,
+        "select_date_range": 3.3221578786955197,
+        "select_category": 1.4172508381590978,
+        "apply_filter": 2.0420603474550445,
+        "reset_filter": 0.33526363913441026,
+        "export_report": 0.7467235598902774,
+        "backtrack": 0.0,
+        "NO_OUTCOME": 82.59676927765925
+      },
+      "unmapped": 0,
+      "majority_class": "NO_OUTCOME",
+      "majority_percentage": 82.59676927765925
+    },
+    "val": {
+      "total_examples": 1377,
+      "counts": {
+        "navigate_overview": 0,
+        "navigate_analytics": 14,
+        "navigate_reports": 11,
+        "select_report": 24,
+        "open_filter_section": 63,
+        "close_filter_section": 0,
+        "select_region": 32,
+        "select_date_range": 46,
+        "select_category": 18,
+        "apply_filter": 27,
+        "reset_filter": 10,
+        "export_report": 11,
+        "backtrack": 0,
+        "NO_OUTCOME": 1121
+      },
+      "percentages": {
+        "navigate_overview": 0.0,
+        "navigate_analytics": 1.016702977487291,
+        "navigate_reports": 0.7988380537400145,
+        "select_report": 1.7429193899782136,
+        "open_filter_section": 4.57516339869281,
+        "close_filter_section": 0.0,
+        "select_region": 2.3238925199709515,
+        "select_date_range": 3.340595497458242,
+        "select_category": 1.3071895424836601,
+        "apply_filter": 1.9607843137254901,
+        "reset_filter": 0.7262164124909223,
+        "export_report": 0.7988380537400145,
+        "backtrack": 0.0,
+        "NO_OUTCOME": 81.40885984023238
+      },
+      "unmapped": 0,
+      "majority_class": "NO_OUTCOME",
+      "majority_percentage": 81.40885984023238
+    },
+    "test": {
+      "total_examples": 1747,
+      "counts": {
+        "navigate_overview": 0,
+        "navigate_analytics": 7,
+        "navigate_reports": 12,
+        "select_report": 19,
+        "open_filter_section": 60,
+        "close_filter_section": 0,
+        "select_region": 16,
+        "select_date_range": 73,
+        "select_category": 23,
+        "apply_filter": 24,
+        "reset_filter": 3,
+        "export_report": 7,
+        "backtrack": 0,
+        "NO_OUTCOME": 1503
+      },
+      "percentages": {
+        "navigate_overview": 0.0,
+        "navigate_analytics": 0.40068689181453926,
+        "navigate_reports": 0.6868918145392101,
+        "select_report": 1.0875787063537492,
+        "open_filter_section": 3.434459072696051,
+        "close_filter_section": 0.0,
+        "select_region": 0.9158557527189467,
+        "select_date_range": 4.178591871780195,
+        "select_category": 1.316542644533486,
+        "apply_filter": 1.3737836290784202,
+        "reset_filter": 0.17172295363480253,
+        "export_report": 0.40068689181453926,
+        "backtrack": 0.0,
+        "NO_OUTCOME": 86.03319977103607
+      },
+      "unmapped": 0,
+      "majority_class": "NO_OUTCOME",
+      "majority_percentage": 86.03319977103607
+    },
+    "overall": {
+      "total_examples": 9686,
+      "counts": {
+        "navigate_overview": 4,
+        "navigate_analytics": 76,
+        "navigate_reports": 69,
+        "select_report": 122,
+        "open_filter_section": 428,
+        "close_filter_section": 9,
+        "select_region": 176,
+        "select_date_range": 337,
+        "select_category": 134,
+        "apply_filter": 185,
+        "reset_filter": 35,
+        "export_report": 67,
+        "backtrack": 0,
+        "NO_OUTCOME": 8044
+      },
+      "percentages": {
+        "navigate_overview": 0.041296716911005574,
+        "navigate_analytics": 0.7846376213091059,
+        "navigate_reports": 0.7123683667148462,
+        "select_report": 1.25954986578567,
+        "open_filter_section": 4.418748709477597,
+        "close_filter_section": 0.09291761304976255,
+        "select_region": 1.8170555440842455,
+        "select_date_range": 3.4792483997522194,
+        "select_category": 1.3834400165186869,
+        "apply_filter": 1.9099731571340077,
+        "reset_filter": 0.3613462729712988,
+        "export_report": 0.6917200082593434,
+        "backtrack": 0.0,
+        "NO_OUTCOME": 83.0476977080322
+      },
+      "unmapped": 0,
+      "majority_class": "NO_OUTCOME",
+      "majority_percentage": 83.0476977080322
+    }
+  },
+  "class_weights": {
+    "strategy": "smoothed",
+    "smoothing_alpha": 10.0,
+    "derived_on": "train_partition_only",
+    "weights": {
+      "navigate_overview": 34.193878173828125,
+      "navigate_analytics": 7.364835262298584,
+      "navigate_reports": 8.548469543457031,
+      "select_report": 5.378812313079834,
+      "open_filter_section": 1.5197279453277588,
+      "close_filter_section": 25.19548797607422,
+      "select_region": 3.4689440727233887,
+      "select_date_range": 2.0996241569519043,
+      "select_category": 4.647711277008057,
+      "apply_filter": 3.324404716491699,
+      "reset_filter": 14.959821701049805,
+      "export_report": 8.113801002502441,
+      "backtrack": 0.0,
+      "NO_OUTCOME": 0.08816100656986237
+    },
+    "max_min_ratio": 387.8571661580509
+  },
+  "target_semantics": {
+    "target_vocabulary_version": "testbed-semantic-target/1.0.0",
+    "recorded_vocabulary_version": "testbed-semantic/1.0.0",
+    "target_vocabulary": [
+      "navigate_overview",
+      "navigate_analytics",
+      "navigate_reports",
+      "select_report",
+      "open_filter_section",
+      "close_filter_section",
+      "select_region",
+      "select_date_range",
+      "select_category",
+      "apply_filter",
+      "reset_filter",
+      "export_report",
+      "backtrack",
+      "NO_OUTCOME"
+    ],
+    "split_unit": "session",
+    "label_sources": {
+      "lookahead_no_outcome": 8044,
+      "trace_semantic_outcome": 1642
+    },
+    "excluded_incomplete_lookahead": 408,
+    "excluded_recorded_only": 0,
+    "lookahead_horizon_ms": [
+      500.0,
+      1500.0
+    ],
+    "provenance": [
+      "participant"
+    ],
+    "provenance_counts": {
+      "participant": 9686
+    }
+  }
+}

@@ -295,11 +295,46 @@ are allow-listed but are not threaded into the canonical Parquet yet.
   mixed directory; `--require-provenance participant` refuses scripted evidence. The report's
   evidence scope and caveats change with the scope.
 - **Scripted result:** `.data/processed/v2.0.0-semantic/` (selected C) is pipeline evidence
-  only. **Participant result:** `.data/processed/v2.1.0-participant/` (selected D,
-  **provisional**) is the evidence for the Phase 4B configuration. The participant export,
-  local provenance retrofit and verification gate are recorded in
+  only. **Participant results:** `.data/processed/v2.1.0-participant/` (35 sessions, selected D,
+  provisional) and `.data/processed/v2.2.0-participant/` (77 sessions, selected D again on the
+  enlarged set). The participant export, local provenance retrofit and verification gate are
+  recorded in
   [`docs/experiments/participant-evidence/README.md`](experiments/participant-evidence/README.md).
 - **Participant-derived pattern candidates:** `python3 -m src.participant_patterns` writes
   [`docs/experiments/participant-patterns/`](experiments/participant-patterns/participant-pattern-candidates.md)
   for Task 50.2. It reads participant traces only and refuses scripted input.
 
+
+
+## 9. Semantic Task-Outcome Head and Bundle v2 (Tasks 40.4–40.5)
+
+- **Owning files:** `src/training.py` (`TargetSemanticHead`), `src/semantic_training.py`,
+  `src/export.py` (`export_semantic_head`).
+- **Head contract:** `sequence_input (batch, T, 18)` + `context_input (batch, 6)` →
+  `task_outcome_logits (batch, 14)`. The 14 outputs are the target vocabulary in §3.1 order;
+  the 15th recorded ID (`inspect_help`) is never an output class.
+- **Backbone:** the existing `models/foundational_gru.pth` GRU is loaded, not retrained from
+  scratch, and is never overwritten. Ablation arms are recorded as `e1` (strict freezing), `e2`
+  (terminal GRU layer + head) and `e3` (full fine-tuning).
+- **Training config:** `models/semantic_head_<arm>_training.json` records the head class count,
+  target/recorded vocabulary versions, dataset version and content hash, split unit, history
+  windows, lookahead horizon, seed, epochs, class weights and their training-only provenance,
+  selected epoch, and checkpoint hash.
+- **Evaluation:** `src/semantic_training.py` reports per-class precision/recall/F1/support,
+  macro-F1 over supported classes and over all 14, weighted-F1, the 14×14 confusion matrix,
+  majority baseline, per-task metrics, lead-time percentiles, top-1/top-3/MRR ranking and
+  ECE/Brier calibration. Absent classes are named and never assigned a fabricated F1.
+- **Bundle v2:** `models/bundles/v2.0.0/bundle.json` uses `bundle_schema_version: "2.0.0"` and
+  records: the 14-outcome `task_outcome_vocabulary`, `target_vocabulary_version`,
+  `recorded_vocabulary_version`, dataset version/content hash, split unit, code commit, seed,
+  environment, input/output contract, measured sizes and latencies, FP32/INT8 parity, test
+  metrics and SHA-256 hashes for the ONNX, INT8 and checkpoint artifacts.
+- **Framework handoff:** the framework's `parseBundleManifest` reads
+  `task_outcome_vocabulary` + `task_outcome_logits`, maps the graph into the foundation slot and
+  takes the artifact hash as its model version. `OnnxSlowGate` supplies both inputs to a
+  two-input foundation session. The committed framework copy is
+  `public/models/task_outcome_head_v2_int8.onnx` +
+  `public/models/task_outcome_head_v2.bundle.json`.
+- **Claim boundary:** participant-derived engineering evidence; session-bounded held-out split;
+  no participant-held-out claim (ADR-023, ADR-031). Sizes and latencies are measurements, not
+  the unmet ADR-008/ADR-016 payload targets.

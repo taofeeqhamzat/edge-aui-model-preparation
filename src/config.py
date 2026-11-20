@@ -132,6 +132,7 @@ class TrainingConfig:
     num_layers: int = 2
     foundation_classes: int = 7
     target_classes: int = 5
+    semantic_classes: int = 14
     device: str = "auto"
 
 
@@ -321,6 +322,9 @@ def load_config(
         num_layers=overrides.get("num_layers", train_dict.get("num_layers", 2)),
         foundation_classes=overrides.get("foundation_classes", train_dict.get("foundation_classes", 7)),
         target_classes=overrides.get("target_classes", train_dict.get("target_classes", 5)),
+        semantic_classes=overrides.get(
+            "semantic_classes", train_dict.get("semantic_classes", 14)
+        ),
         device=overrides.get("device", train_dict.get("device", "auto"))
     )
 

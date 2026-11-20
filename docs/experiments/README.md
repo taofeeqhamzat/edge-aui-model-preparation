@@ -26,6 +26,16 @@ This directory contains empirical experiment logs, diagnostic visual plots, and 
   - Diagnostic post-training plots: [`3/after/`](3/after/)
   - Reproducibility bundle: `models/bundles/v1.0.0/bundle.json`
 
+- **[Experiment 4: Semantic Target-Head Retraining (Workstream 40.4–40.5)](semantic-head/semantic-head-report.md)**
+  Retrains a 14-class semantic task-outcome head on dataset `v2.2.0-participant` (77 verified
+  participant sessions). E1/E2/E3 freeze/partial/full ablation; E2 selected on validation
+  macro-F1 (test macro-F1 0.1297 vs majority 0.0841). ONNX/INT8 export and bundle `v2.0.0`
+  produced and handed to the framework.
+  - Participant export and verification: [`participant-evidence/`](participant-evidence/README.md)
+  - Window/horizon re-confirmation: [`window-horizon-participant-r2/`](window-horizon-participant-r2/window-horizon-report.md)
+  - Presented notebook: [`notebooks/04_semantic_target_head_retraining.ipynb`](../../notebooks/04_semantic_target_head_retraining.ipynb)
+  - Bundle: `models/bundles/v2.0.0/bundle.json`
+
 ## Directory Structure
 
 Each numbered experiment directory contains:

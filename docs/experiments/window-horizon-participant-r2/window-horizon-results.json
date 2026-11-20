@@ -1,0 +1,690 @@
+{
+  "evidence_scope": "Participant captures (77 sessions). These are participant-derived engineering evidence, not a completed study: participant identifiers are not approved (ADR-023), the splits are session-bounded (ADR-031), and the configuration selection is provisional until more participant traces are collected. No semantic head was trained, so no semantic-model performance is claimed.",
+  "experiments": [
+    {
+      "config": {
+        "history_windows": 8,
+        "id": "A",
+        "label": "baseline 8x500 ms, [500, 1500] ms",
+        "lookahead_ms": [
+          500,
+          1500
+        ],
+        "stride_ms": 250
+      },
+      "metrics": {
+        "excluded_incomplete_lookahead": 408,
+        "excluded_recorded_only": 0,
+        "false_early_predictions": 0,
+        "lead_time_median_ms": 1024.97509765625,
+        "lead_time_ms": {
+          "median": 1024.97509765625,
+          "p25": 765.579833984375,
+          "p75": 1259.679931640625
+        },
+        "macro_f1": 0.08420536298234141,
+        "per_class_prf": {
+          "macro_f1": 0.08420536298234141,
+          "majority_class": "NO_OUTCOME",
+          "per_class": {
+            "NO_OUTCOME": {
+              "f1": 0.9262589928057555,
+              "precision": 0.8626465661641541,
+              "recall": 1.0,
+              "support": 1545
+            },
+            "apply_filter": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 24
+            },
+            "backtrack": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "close_filter_section": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "export_report": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 7
+            },
+            "navigate_analytics": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 7
+            },
+            "navigate_overview": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "navigate_reports": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 12
+            },
+            "open_filter_section": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 61
+            },
+            "reset_filter": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 3
+            },
+            "select_category": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 23
+            },
+            "select_date_range": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 73
+            },
+            "select_region": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 16
+            },
+            "select_report": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 20
+            }
+          }
+        },
+        "per_outcome_frequency": {
+          "NO_OUTCOME": 5620,
+          "apply_filter": 134,
+          "backtrack": 0,
+          "close_filter_section": 9,
+          "export_report": 49,
+          "navigate_analytics": 64,
+          "navigate_overview": 4,
+          "navigate_reports": 46,
+          "open_filter_section": 311,
+          "reset_filter": 22,
+          "select_category": 93,
+          "select_date_range": 218,
+          "select_region": 128,
+          "select_report": 80
+        },
+        "task_coverage": {
+          "test": {
+            "TD1": 321,
+            "TD2": 820,
+            "TD3": 381,
+            "TD4": 269
+          },
+          "train": {
+            "TD1": 1530,
+            "TD2": 1621,
+            "TD3": 2415,
+            "TD4": 1212
+          },
+          "val": {
+            "TD1": 481,
+            "TD2": 91,
+            "TD3": 654,
+            "TD4": 199
+          }
+        },
+        "tasks_absent": {
+          "test": [],
+          "train": [],
+          "val": []
+        },
+        "time_between_actions_ms": {
+          "median": 3686.614990234375,
+          "p25": 1765.6474609375,
+          "p75": 5955.89501953125
+        },
+        "total_examples": 9994,
+        "train_classes_with_min_support": 12,
+        "train_max_class_share": 0.8291531425199173
+      },
+      "order": 0
+    },
+    {
+      "config": {
+        "history_windows": 8,
+        "id": "B",
+        "label": "8x500 ms, [1000, 2000] ms",
+        "lookahead_ms": [
+          1000,
+          2000
+        ],
+        "stride_ms": 250
+      },
+      "metrics": {
+        "excluded_incomplete_lookahead": 557,
+        "excluded_recorded_only": 0,
+        "false_early_predictions": 0,
+        "lead_time_median_ms": 1517.1248779296875,
+        "lead_time_ms": {
+          "median": 1517.1248779296875,
+          "p25": 1262.7237548828125,
+          "p75": 1752.6239013671875
+        },
+        "macro_f1": 0.08405636916275215,
+        "per_class_prf": {
+          "macro_f1": 0.08405636916275215,
+          "majority_class": "NO_OUTCOME",
+          "per_class": {
+            "NO_OUTCOME": {
+              "f1": 0.9246200607902736,
+              "precision": 0.8598078010175241,
+              "recall": 1.0,
+              "support": 1521
+            },
+            "apply_filter": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 23
+            },
+            "backtrack": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "close_filter_section": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "export_report": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 7
+            },
+            "navigate_analytics": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 7
+            },
+            "navigate_overview": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "navigate_reports": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 12
+            },
+            "open_filter_section": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 62
+            },
+            "reset_filter": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 3
+            },
+            "select_category": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 23
+            },
+            "select_date_range": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 76
+            },
+            "select_region": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 16
+            },
+            "select_report": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 19
+            }
+          }
+        },
+        "per_outcome_frequency": {
+          "NO_OUTCOME": 5520,
+          "apply_filter": 133,
+          "backtrack": 0,
+          "close_filter_section": 10,
+          "export_report": 48,
+          "navigate_analytics": 59,
+          "navigate_overview": 4,
+          "navigate_reports": 45,
+          "open_filter_section": 313,
+          "reset_filter": 22,
+          "select_category": 93,
+          "select_date_range": 223,
+          "select_region": 126,
+          "select_report": 78
+        },
+        "task_coverage": {
+          "test": {
+            "TD1": 317,
+            "TD2": 812,
+            "TD3": 377,
+            "TD4": 263
+          },
+          "train": {
+            "TD1": 1497,
+            "TD2": 1599,
+            "TD3": 2389,
+            "TD4": 1189
+          },
+          "val": {
+            "TD1": 473,
+            "TD2": 90,
+            "TD3": 646,
+            "TD4": 193
+          }
+        },
+        "tasks_absent": {
+          "test": [],
+          "train": [],
+          "val": []
+        },
+        "time_between_actions_ms": {
+          "median": 3692.43994140625,
+          "p25": 1740.5499877929688,
+          "p75": 5953.405029296875
+        },
+        "total_examples": 9845,
+        "train_classes_with_min_support": 12,
+        "train_max_class_share": 0.827090200779143
+      },
+      "order": 1
+    },
+    {
+      "config": {
+        "history_windows": 4,
+        "id": "C",
+        "label": "4x500 ms, [500, 1500] ms",
+        "lookahead_ms": [
+          500,
+          1500
+        ],
+        "stride_ms": 250
+      },
+      "metrics": {
+        "excluded_incomplete_lookahead": 408,
+        "excluded_recorded_only": 0,
+        "false_early_predictions": 0,
+        "lead_time_median_ms": 1024.97509765625,
+        "lead_time_ms": {
+          "median": 1024.97509765625,
+          "p25": 765.9874267578125,
+          "p75": 1258.6849365234375
+        },
+        "macro_f1": 0.0842922058940767,
+        "per_class_prf": {
+          "macro_f1": 0.0842922058940767,
+          "majority_class": "NO_OUTCOME",
+          "per_class": {
+            "NO_OUTCOME": {
+              "f1": 0.9272142648348436,
+              "precision": 0.8643051771117166,
+              "recall": 1.0,
+              "support": 1586
+            },
+            "apply_filter": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 24
+            },
+            "backtrack": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "close_filter_section": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "export_report": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 7
+            },
+            "navigate_analytics": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 7
+            },
+            "navigate_overview": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "navigate_reports": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 12
+            },
+            "open_filter_section": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 61
+            },
+            "reset_filter": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 3
+            },
+            "select_category": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 23
+            },
+            "select_date_range": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 73
+            },
+            "select_region": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 16
+            },
+            "select_report": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 23
+            }
+          }
+        },
+        "per_outcome_frequency": {
+          "NO_OUTCOME": 5825,
+          "apply_filter": 134,
+          "backtrack": 0,
+          "close_filter_section": 9,
+          "export_report": 49,
+          "navigate_analytics": 71,
+          "navigate_overview": 4,
+          "navigate_reports": 46,
+          "open_filter_section": 312,
+          "reset_filter": 22,
+          "select_category": 93,
+          "select_date_range": 218,
+          "select_region": 128,
+          "select_report": 83
+        },
+        "task_coverage": {
+          "test": {
+            "TD1": 329,
+            "TD2": 836,
+            "TD3": 389,
+            "TD4": 281
+          },
+          "train": {
+            "TD1": 1603,
+            "TD2": 1663,
+            "TD3": 2475,
+            "TD4": 1253
+          },
+          "val": {
+            "TD1": 497,
+            "TD2": 100,
+            "TD3": 665,
+            "TD4": 211
+          }
+        },
+        "tasks_absent": {
+          "test": [],
+          "train": [],
+          "val": []
+        },
+        "time_between_actions_ms": {
+          "median": 3698.264892578125,
+          "p25": 1786.784912109375,
+          "p75": 6051.68994140625
+        },
+        "total_examples": 10302,
+        "train_classes_with_min_support": 12,
+        "train_max_class_share": 0.8328567343437232
+      },
+      "order": 2
+    },
+    {
+      "config": {
+        "history_windows": 12,
+        "id": "D",
+        "label": "12x500 ms, [500, 1500] ms",
+        "lookahead_ms": [
+          500,
+          1500
+        ],
+        "stride_ms": 250
+      },
+      "metrics": {
+        "excluded_incomplete_lookahead": 408,
+        "excluded_recorded_only": 0,
+        "false_early_predictions": 0,
+        "lead_time_median_ms": 1023.28759765625,
+        "lead_time_ms": {
+          "median": 1023.28759765625,
+          "p25": 765.7836303710938,
+          "p75": 1257.2312622070312
+        },
+        "macro_f1": 0.08408391608391609,
+        "per_class_prf": {
+          "macro_f1": 0.08408391608391609,
+          "majority_class": "NO_OUTCOME",
+          "per_class": {
+            "NO_OUTCOME": {
+              "f1": 0.924923076923077,
+              "precision": 0.8603319977103606,
+              "recall": 1.0,
+              "support": 1503
+            },
+            "apply_filter": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 24
+            },
+            "backtrack": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "close_filter_section": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "export_report": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 7
+            },
+            "navigate_analytics": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 7
+            },
+            "navigate_overview": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 0
+            },
+            "navigate_reports": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 12
+            },
+            "open_filter_section": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 60
+            },
+            "reset_filter": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 3
+            },
+            "select_category": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 23
+            },
+            "select_date_range": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 73
+            },
+            "select_region": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 16
+            },
+            "select_report": {
+              "f1": 0.0,
+              "precision": 0.0,
+              "recall": 0.0,
+              "support": 19
+            }
+          }
+        },
+        "per_outcome_frequency": {
+          "NO_OUTCOME": 5420,
+          "apply_filter": 134,
+          "backtrack": 0,
+          "close_filter_section": 9,
+          "export_report": 49,
+          "navigate_analytics": 55,
+          "navigate_overview": 4,
+          "navigate_reports": 46,
+          "open_filter_section": 305,
+          "reset_filter": 22,
+          "select_category": 93,
+          "select_date_range": 218,
+          "select_region": 128,
+          "select_report": 79
+        },
+        "task_coverage": {
+          "test": {
+            "TD1": 313,
+            "TD2": 804,
+            "TD3": 373,
+            "TD4": 257
+          },
+          "train": {
+            "TD1": 1459,
+            "TD2": 1574,
+            "TD3": 2364,
+            "TD4": 1165
+          },
+          "val": {
+            "TD1": 465,
+            "TD2": 87,
+            "TD3": 638,
+            "TD4": 187
+          }
+        },
+        "tasks_absent": {
+          "test": [],
+          "train": [],
+          "val": []
+        },
+        "time_between_actions_ms": {
+          "median": 3698.264892578125,
+          "p25": 1736.5899658203125,
+          "p75": 5955.89501953125
+        },
+        "total_examples": 9686,
+        "train_classes_with_min_support": 12,
+        "train_max_class_share": 0.8259676927765925
+      },
+      "order": 3
+    }
+  ],
+  "provenance": "participant",
+  "selection": {
+    "config": {
+      "history_windows": 12,
+      "id": "D",
+      "label": "12x500 ms, [500, 1500] ms",
+      "lookahead_ms": [
+        500,
+        1500
+      ],
+      "stride_ms": 250
+    },
+    "criteria": [
+      "maximise training classes with >= 5 examples",
+      "minimise the largest single-class share in training",
+      "minimise median lead time (earlier warning)",
+      "declared A, B, C, D order"
+    ],
+    "order": 3,
+    "provisional": true,
+    "ranking": [
+      "D",
+      "B",
+      "A",
+      "C"
+    ],
+    "rationale": "Configuration D was selected by the pre-declared criteria: 12 target classes have at least 5 training examples (highest), the largest training class holds 82.6% of examples, and the median lead time is 1023.3 ms. This selection is provisional: it is participant-derived engineering evidence with a small session count and must be re-confirmed after further collection before the semantic head training run."
+  },
+  "session_count": 77
+}

@@ -892,6 +892,8 @@ def save_target_dataset_parquet(
     out_file = Path(output_path)
     out_file.parent.mkdir(parents=True, exist_ok=True)
 
+    provenances = {str(row.get("provenance")) for row in rows if row.get("provenance")}
+    is_participant = provenances == {"participant"}
     custom_metadata = {
         "sequence_length": str(seq_len),
         "feature_dim": "18",
@@ -900,8 +902,15 @@ def save_target_dataset_parquet(
         "label_policy_version": str(LABEL_POLICY_VERSION),
         "preprocessing_version": str(PREPROCESSING_VERSION),
         "feature_schema_version": str(FEATURE_SCHEMA_VERSION),
-        "is_scripted_policy": "true",
-        "adr_claim_boundary": "ADR-013: Substitute interaction traces and scripted label assignments.",
+        "is_scripted_policy": str(
+            any(row.get("is_scripted_policy") for row in rows)
+        ).lower(),
+        "adr_claim_boundary": (
+            "Participant-declared interaction traces; session-bounded splits; no "
+            "participant-held-out claim (ADR-023, ADR-031)."
+            if is_participant
+            else "ADR-013: Substitute interaction traces and scripted label assignments."
+        ),
     }
     if split_summary:
         custom_metadata["split_strategy"] = str(split_summary.get("split_strategy"))
@@ -1170,6 +1179,107 @@ def get_intervention_class_weights(
             tensor_w = tensor_w.to(device)
         return tensor_w
     return np.asarray(weights_list, dtype=np.float32)
+
+
+def load_semantic_dataset(
+    version: str = "v2.2.0-participant",
+    split: str = "train",
+    data_dir: Optional[Union[str, Path]] = None,
+    parquet_path: Optional[Union[str, Path]] = None,
+) -> TargetInterventionDataset:
+    """Load a semantic-outcome split (Task 40.4).
+
+    Targets are ``target_task_outcome_id`` (the approved 14-ID vocabulary), never the generic
+    seven-class ``target_outcome`` and never the five-class intervention label. Rows without a
+    semantic label are a dataset defect and raise, because silently dropping or relabelling them
+    would change the class distribution the manifest reports.
+    """
+    if parquet_path is None:
+        root = Path(data_dir) if data_dir else Path(find_project_root())
+        parquet_path = (
+            root / ".data" / "processed" / version / "target_semantic_dataset.parquet"
+        )
+    else:
+        parquet_path = Path(parquet_path)
+
+    if not parquet_path.is_file():
+        raise FileNotFoundError(f"Semantic dataset not found at: {parquet_path}")
+    if not PYARROW_AVAILABLE:
+        raise RuntimeError("PyArrow is required to read semantic Parquet files.")
+
+    df = pq.read_table(str(parquet_path)).to_pandas()
+    if split != "all":
+        df = df[df["split"] == split]
+    if len(df) == 0:
+        return _empty_intervention_dataset()
+
+    if "target_task_outcome_id" not in df.columns:
+        raise ValueError(
+            f"Dataset '{parquet_path}' has no target_task_outcome_id column; it is not a "
+            f"semantic dataset"
+        )
+    missing = df["target_task_outcome_id"].isna()
+    if bool(missing.any()):
+        raise ValueError(
+            f"Dataset '{parquet_path}' has {int(missing.sum())} row(s) without a semantic "
+            f"target label"
+        )
+
+    sequences = np.stack([np.stack(seq) for seq in df["sequence"].values]).astype(np.float32)
+    contexts = np.stack(df["context_vector"].values).astype(np.float32)
+    targets = np.array(df["target_task_outcome_id"].values, dtype=np.int64)
+
+    meta_cols = [
+        c for c in df.columns
+        if c not in ("sequence", "context_vector", "target_task_outcome_id")
+    ]
+    metadata = df[meta_cols].to_dict(orient="records")
+    return TargetInterventionDataset(sequences, contexts, targets, metadata=metadata)
+
+
+def get_semantic_class_weights(
+    version: str = "v2.2.0-participant",
+    data_dir: Optional[Union[str, Path]] = None,
+    manifest_path: Optional[Union[str, Path]] = None,
+    device: Optional[Union[str, Any]] = None,
+) -> Any:
+    """Training-partition-only class weights for the 14-class semantic vocabulary.
+
+    Weights are read from the version manifest, which resolves them on the training partition
+    only. A class absent from training keeps the manifest's declared weight (0.0) rather than
+    being silently floored to 1.0.
+    """
+    if manifest_path is None:
+        root = Path(data_dir) if data_dir else Path(find_project_root())
+        manifest_path = root / ".data" / "processed" / version / "manifest.json"
+    else:
+        manifest_path = Path(manifest_path)
+
+    weights: List[float]
+    if manifest_path.is_file():
+        with open(manifest_path, "r", encoding="utf-8") as handle:
+            manifest_data = json.load(handle)
+        weight_dict = manifest_data.get("class_weights", {}).get("weights", {})
+        weights = [float(weight_dict.get(TARGET_VOCABULARY[i], 1.0)) for i in sorted(TARGET_VOCABULARY)]
+    else:
+        train_ds = load_semantic_dataset(version=version, split="train", data_dir=data_dir)
+        if compute_class_weights is None:
+            raise RuntimeError("Class weights are unavailable: manifest and target_generation missing")
+        weights = [
+            float(w) for w in compute_class_weights(
+                train_ds.targets,
+                num_classes=len(TARGET_VOCABULARY),
+                smoothing_alpha=10.0,
+                allow_empty=True,
+            )
+        ]
+
+    if TORCH_AVAILABLE and torch is not None:
+        tensor = torch.tensor(weights, dtype=torch.float32)
+        if device is not None:
+            tensor = tensor.to(device)
+        return tensor
+    return np.asarray(weights, dtype=np.float32)
 
 
 def _build_parser() -> argparse.ArgumentParser:

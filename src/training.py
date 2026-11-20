@@ -91,6 +91,30 @@ except ImportError:
     except ImportError:
         load_config = lambda: {}
 
+try:
+    from semantic_targets import (
+        TARGET_VOCABULARY,
+        TARGET_VOCABULARY_VERSION,
+        RECORDED_VOCABULARY_VERSION,
+    )
+except ImportError:
+    try:
+        from src.semantic_targets import (
+            TARGET_VOCABULARY,
+            TARGET_VOCABULARY_VERSION,
+            RECORDED_VOCABULARY_VERSION,
+        )
+    except ImportError:
+        TARGET_VOCABULARY = {
+            0: "navigate_overview", 1: "navigate_analytics", 2: "navigate_reports",
+            3: "select_report", 4: "open_filter_section", 5: "close_filter_section",
+            6: "select_region", 7: "select_date_range", 8: "select_category",
+            9: "apply_filter", 10: "reset_filter", 11: "export_report",
+            12: "backtrack", 13: "NO_OUTCOME",
+        }
+        TARGET_VOCABULARY_VERSION = "testbed-semantic-target/1.0.0"
+        RECORDED_VOCABULARY_VERSION = "testbed-semantic/1.0.0"
+
 # Default Configuration
 DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".data", "raw"))
 BATCH_SIZE = 64
@@ -99,6 +123,7 @@ LEARNING_RATE = 1e-3
 HIDDEN_DIM = 64
 NUM_LAYERS = 2
 NUM_CLASSES = 7  # NO_OUTCOME, CLICK, FORM_SUBMIT, BACKTRACK, RAPID_SCROLL, HOVER_DWELL, ABANDON
+SEMANTIC_NUM_CLASSES = len(TARGET_VOCABULARY)  # approved 14-ID target vocabulary (ADR-030)
 
 
 def get_device(device_override: Optional[str] = None) -> torch.device:
@@ -156,6 +181,30 @@ class TargetInterventionHead(nn.Module):
             raise ValueError("UI context tensor is mandatory for TargetInterventionHead.")
         features = torch.cat([h_T, context], dim=-1)
         return self.fc(features)
+
+
+class TargetSemanticHead(TargetInterventionHead):
+    """
+    Semantic task-outcome projection head (Task 40.4).
+
+    Same context-conditioned MLP contract as ``TargetInterventionHead`` — ``(h_T, C) -> logits``
+    — with the output dimension pinned to the approved 14-ID target vocabulary (ADR-030),
+    not the 15-ID recorded vocabulary and not the legacy five intervention classes. ADR-030
+    excludes ``inspect_help``; its windows are dropped from the label set, not relabelled.
+    """
+
+    def __init__(
+        self,
+        hidden_dim: int = 64,
+        context_dim: int = 6,
+        num_classes: int = SEMANTIC_NUM_CLASSES,
+    ):
+        if num_classes != SEMANTIC_NUM_CLASSES:
+            raise ValueError(
+                f"TargetSemanticHead is pinned to the {SEMANTIC_NUM_CLASSES}-class target "
+                f"vocabulary (ADR-030); received num_classes={num_classes}"
+            )
+        super().__init__(hidden_dim=hidden_dim, context_dim=context_dim, num_classes=num_classes)
 
 
 class EdgeAUIGRU(nn.Module):

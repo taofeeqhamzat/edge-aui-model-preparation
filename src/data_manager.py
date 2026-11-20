@@ -382,6 +382,17 @@ ADR_013_CLAIM_BOUNDARY = (
 )
 
 
+PARTICIPANT_CLAIM_BOUNDARY = (
+    "Participant-declared interaction traces. Results from this dataset may be reported as "
+    "participant-derived engineering evidence: the dataset -> preparation -> training -> "
+    "export -> runtime path executes end to end, and the learned head's task-outcome metrics "
+    "on the declared held-out split. No participant identifier is approved (ADR-023), the "
+    "split unit is the session (ADR-031), and the sample is small and sparse; no "
+    "participant-held-out generalisation is claimed. Model accuracy is not evidence of "
+    "usability, task performance, intervention benefit, or user experience."
+)
+
+
 class ManifestValidationError(ValueError):
     """Raised when dataset manifest fails provenance, integrity, or split disjointness validation."""
     pass
@@ -469,14 +480,20 @@ def create_dataset_manifest(
     content_hash = compute_dataset_content_hash(rows)
     resolved_version = dataset_version or f"v1.0.0-{content_hash}"
     manifest_examples = [_manifest_example(row) for row in rows]
+    provenances = {str(row.get("provenance")) for row in rows if row.get("provenance")}
+    is_participant = provenances == {"participant"}
+    if provenances and not is_participant and provenances != {"scripted"}:
+        raise ManifestValidationError(
+            f"Cannot label a manifest whose rows mix provenances: {sorted(provenances)}"
+        )
 
     manifest: Dict[str, Any] = {
         "manifest_schema_version": MANIFEST_SCHEMA_VERSION,
         "dataset_version": resolved_version,
         "content_hash": content_hash,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "source_data_type": "scripted_substitute_testbed",
-        "claim_boundary": ADR_013_CLAIM_BOUNDARY,
+        "source_data_type": "participant_capture" if is_participant else "scripted_substitute_testbed",
+        "claim_boundary": PARTICIPANT_CLAIM_BOUNDARY if is_participant else ADR_013_CLAIM_BOUNDARY,
         "provenance_spec": {
             "brief_reference": "Brief Section 8 & Section 17",
             "required_fields": list(PROVENANCE_REQUIRED_FIELDS),

@@ -1,14 +1,56 @@
-# Participant Evidence — 2026-11-19 Export (Local Retrofit)
+# Participant Evidence — Local Retrofit and Verifier Gate
 
 - **Status:** participant-derived engineering evidence; **not** a completed study
-- **Source:** Supabase project `bfntyqahujplvcowjdmh` (`edge-aui`), exported 2026-11-19
+- **Source:** Supabase project `bfntyqahujplvcowjdmh` (`edge-aui`)
 - **Provenance:** `participant` (declared by researcher instruction; locally retrofitted)
-- **Analysis input:** 35 of 39 exported sessions (4 excluded by the framework verifier)
 - **Split unit:** session (ADR-031). No participant identifier is approved (ADR-023), so
   `participantId` is null and no participant-held-out generalisation is claimed.
 
-This directory records how the participant set was obtained, corrected and gated. The traces
+This directory records how the participant sets were obtained, corrected and gated. The traces
 themselves live under `.data/` and are not committed.
+
+## Export rounds
+
+| Round | Exported | Provenance retrofit | Verifier | Dataset | Head |
+| --- | --- | --- | --- | --- | --- |
+| 2026-11-19 | 39 | 39 corrected | 35 verified / 4 excluded | `v2.1.0-participant` | none |
+| **2026-11-20** | **92** | **44 corrected, 48 already correct** | **77 verified / 15 excluded** | **`v2.2.0-participant`** | **`semantic_head_e2`** |
+
+The 2026-11-20 round supersedes the 2026-11-19 round as analysis input. It uses the same
+retrofit rule, the same verifier and the same session-bounded split construction. The 2026-11-19
+sections below remain as the audit record of the first round.
+
+## 2026-11-20 round (current analysis input)
+
+- **Authority:** researcher instruction in session on 2026-11-20 while completing Workstream 40:
+  the 92-session Supabase export is a participant capture set from the corrected deployment; the
+  remaining `scripted` declarations are upload-mode oversights. The audit manifest records every
+  original and corrected declaration and both file hashes.
+- **Retrofit:** 44 trace bodies corrected, 48 already participant; database and source export
+  untouched; `participantId` null.
+- **Verification:** 77 verified; 15 excluded — `prediction_window_attribution` ×11,
+  `structural_validity` ×3, `task_lifecycle_consistency` ×1.
+- **Dataset:** `v2.2.0-participant`, 9,686 examples, 77 session-bounded splits; class weights
+  from training only; `NO_OUTCOME` 82.6% of training. The manifest's source type is
+  `participant_capture` and its claim boundary is participant-specific.
+- **Configuration:** the 40.3 experiment re-selected D (12×500 ms, [500,1500]) provisionally.
+- **Head:** E2 selected on validation macro-F1. Test macro-F1 0.1297 vs majority 0.0841;
+  accuracy 0.1271 vs 0.8603. This is participant-derived engineering evidence, not a
+  participant-held-out or user-benefit claim.
+- **Artefacts:** [semantic-head report](../semantic-head/semantic-head-report.md),
+  [dataset summary](dataset-summary-v2.2.0-participant.json),
+  [window/horizon report](../window-horizon-participant-r2/window-horizon-report.md),
+  [notebook](../../notebooks/04_semantic_target_head_retraining.ipynb).
+- **Audit manifests:** [`retrofit-manifest-2026-11-20.json`](retrofit-manifest-2026-11-20.json),
+  [`verification-manifest-2026-11-20.json`](verification-manifest-2026-11-20.json),
+  [`export-manifest-2026-11-20.json`](export-manifest-2026-11-20.json).
+- **Reproduction:**
+  `python3 -m src.provenance_retrofit --source .data/raw/collected-2026-11-20
+  --output .data/raw/participant-2026-11-20 --authority "<instruction>"`, then
+  `python3 -m src.participant_evidence --source .data/raw/participant-2026-11-20
+  --output .data/raw/participant-verified-2026-11-20 --framework-root ../edge-aui-framework`.
+
+## 2026-11-19 round
 
 ## 1. Why a retrofit was needed
 

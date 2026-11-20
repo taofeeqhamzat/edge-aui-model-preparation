@@ -110,6 +110,9 @@ training:
   num_layers: 2
   foundation_classes: 7
   target_classes: 5
+  # Approved semantic target vocabulary (ADR-030). The runtime records 15 IDs; only the
+  # approved 14 are model targets, so the semantic head's output dimension is 14.
+  semantic_classes: 14
   device: "auto" # "auto", "cuda", "mps", "cpu"
 
 ablation:
