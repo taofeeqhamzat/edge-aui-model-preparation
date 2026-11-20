@@ -14,7 +14,8 @@ seven-class outcome target to a semantic task-outcome dataset, experiment and ta
 - build a versioned semantic dataset with provenance, participant/session-bounded splits and
   training-only class weights;
 - evaluate a small set of history-window/prediction-horizon configurations;
-- train/evaluate a semantic target head on participant-held-out data;
+- train/evaluate a semantic target head on participant-derived data, with the declared
+  session-bounded held-out split (no participant-held-out claim until ADR-023 approves an ID);
 - export a versioned ONNX/bundle artifact and hand it to the framework.
 
 ## Current state (2026-11-20)
